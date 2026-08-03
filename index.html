@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Carlos – Personal ERP</title>
+  <meta name="description" content="Carlos – persönliches Vermögens-ERP, Privat & Business. Lokal und privat.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230070f2'/><circle cx='16' cy='12' r='5' fill='white'/><path d='M6.5 26.5c0-5 4.3-7.5 9.5-7.5s9.5 2.5 9.5 7.5z' fill='white'/></svg>">
+  <link rel="stylesheet" href="assets/css/styles.css?v=3.6">
+</head>
+<body>
+  <div class="layout">
+    <!-- ============ Sidebar ============ -->
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM5 20c0-3.6 3.1-6 7-6s7 2.4 7 6"/>
+          </svg>
+        </span>
+        <div class="brand-text">
+          <span class="brand-name">Carlos</span>
+          <span class="brand-sub">Personal ERP</span>
+        </div>
+      </div>
+      <nav class="nav" id="nav"><!-- wird per JS erzeugt --></nav>
+      <div class="sidebar-foot">
+        <button class="nav-leaf" data-action="nav" data-section="einstellungen">
+          <span class="nav-ico" id="icoSettings"></span> Einstellungen
+        </button>
+        <p class="privacy">🔒 Lokal &amp; privat – nichts verlässt dein Gerät.</p>
+      </div>
+    </aside>
+
+    <!-- ============ Inhalt ============ -->
+    <div class="content">
+      <header class="topbar">
+        <button class="hamburger" data-action="toggle-sidebar" aria-label="Menü">☰</button>
+        <div class="topbar-title" id="topbarTitle">Übersicht</div>
+      </header>
+      <main class="view" id="viewContainer" aria-live="polite"></main>
+    </div>
+  </div>
+
+  <div class="scrim" id="scrim" data-action="close-sidebar"></div>
+
+  <div class="modal-overlay hidden" id="modalOverlay" data-action="modal-backdrop">
+    <div class="modal" id="modal" role="dialog" aria-modal="true"></div>
+  </div>
+
+  <script src="assets/js/store.js?v=3.6"></script>
+  <script src="assets/js/charts.js?v=3.6"></script>
+  <script src="assets/js/app.js?v=3.6"></script>
+</body>
+</html>

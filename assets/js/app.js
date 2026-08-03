@@ -814,7 +814,7 @@
       '<button class="btn btn-danger" data-action="clear-all">Alles löschen</button></div></div>' +
 
       '<div class="panel"><div class="panel-head"><h3 class="panel-title">Über</h3></div>' +
-      '<p class="panel-note">Carlos · Personal ERP – Version 3.6. Lokales, privates Vermögenscockpit.<br>' +
+      '<p class="panel-note">Carlos · Personal ERP – Version 3.8. Vermögenscockpit mit Login &amp; Cloud-Sync (Supabase, RLS).<br>' +
       "Geplant: automatische Bankanbindung, Live-Kurse, Dokumenten-Upload &amp; -Suche (RAG) für den Chatbot.</p></div>";
   }
 
@@ -1267,15 +1267,17 @@
   }
 
   /* ================= Init ================= */
-  function init() {
-    Store.load();
+  function attachListeners() {
     document.addEventListener("click", onClick);
     document.addEventListener("submit", onSubmit);
     document.addEventListener("input", onInput);
     document.addEventListener("change", onChange);
     document.addEventListener("keydown", onKey);
-    render();
   }
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
-  else init();
+  // Start übernimmt der Auth-/Sync-Layer (auth.js): nach Login werden die Daten
+  // aus Supabase geladen (Store.setRawState) und App.render() aufgerufen.
+  // Ohne/vor Login bleibt die App verborgen; ist Supabase nicht verfügbar,
+  // fällt auth.js auf den lokalen Modus zurück.
+  window.App = { render: render, attachListeners: attachListeners };
+  attachListeners();
 })();

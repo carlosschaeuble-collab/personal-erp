@@ -171,6 +171,32 @@ const Store = (function () {
       console.error("Carlos ERP: Speichern fehlgeschlagen.", e);
       alert("Achtung: Speichern nicht möglich (Speicher voll oder blockiert).");
     }
+    if (cloudSync) { try { cloudSync(); } catch (e) { /* Sync best effort */ } }
+  }
+
+  /* ---------------------------------------------------------
+     Cloud-Sync (Supabase) – wird von auth.js verdrahtet
+     --------------------------------------------------------- */
+  let cloudSync = null;
+  function setCloudSync(fn) { cloudSync = fn; }      // Callback, das save() nach jeder Änderung aufruft
+  function getRawState() { return state; }            // aktuellen Zustand für den Upload holen
+  function setRawState(obj) {                          // Zustand aus der Cloud übernehmen (ohne Rück-Sync)
+    if (!obj || typeof obj !== "object") return;
+    state = {
+      version: 2,
+      assets: Array.isArray(obj.assets) ? obj.assets : [],
+      partners: Array.isArray(obj.partners) ? obj.partners : [],
+      buchungskreise: Array.isArray(obj.buchungskreise) ? obj.buchungskreise : [],
+      termine: Array.isArray(obj.termine) ? obj.termine : [],
+      snapshots: Array.isArray(obj.snapshots) ? obj.snapshots : [],
+      settings: obj.settings || {}
+    };
+    migratePartners();
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* Cache best effort */ }
+  }
+  function clearLocalCache() {                          // beim Logout: nichts auf dem Gerät zurücklassen
+    state = clone(DEFAULT_STATE);
+    try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ }
   }
 
   /* ---------------------------------------------------------
@@ -609,8 +635,9 @@ const Store = (function () {
     getBuchungskreise: getBuchungskreise, getBuchungskreis: getBuchungskreis, addBuchungskreis: addBuchungskreis, updateBuchungskreis: updateBuchungskreis, deleteBuchungskreis: deleteBuchungskreis,
     getNews: getNews,
     getSnapshots: getSnapshots, addSnapshot: addSnapshot, deleteSnapshot: deleteSnapshot,
-    // Export
+    // Export & Cloud-Sync
     exportJSON: exportJSON, importJSON: importJSON, exportCSV: exportCSV, clearAll: clearAll, loadSample: loadSample,
+    setCloudSync: setCloudSync, getRawState: getRawState, setRawState: setRawState, clearLocalCache: clearLocalCache,
     // Config
     schemaFor: schemaFor, SCHEMAS: SCHEMAS,
     BEREICHE: BEREICHE, KATEGORIEN: KATEGORIEN, ROLLEN: ROLLEN, NEWS_TAGS: NEWS_TAGS,

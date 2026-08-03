@@ -3,16 +3,28 @@
 Dein persönliches Vermögens-ERP: das komplette finanzielle Leben – **privat und
 Business (KG)** – in einer lokalen Web-App im hellen, SAP-inspirierten Design.
 
-> 🔒 **Datenschutz:** Alle Daten bleiben ausschließlich in deinem Browser (localStorage).
-> Es werden keine Daten ins Internet gesendet. Die App funktioniert komplett offline.
+> 🔒 **Zugriff & Datenschutz:** Login per E-Mail/Passwort (Supabase Auth). Die Daten liegen
+> in Supabase (Postgres) und sind durch **Row Level Security (RLS)** geschützt – nur der
+> eingeloggte Benutzer kann seine eigenen Daten lesen/schreiben. `localStorage` dient nur
+> noch als Offline-Cache und wird beim Abmelden geleert.
 
 ---
 
 ## Starten
 
-Einfach **`index.html`** im Browser öffnen (Doppelklick). Keine Installation, kein Server.
+Die App muss über **HTTP** laufen (Supabase-CORS), nicht per `file://`-Doppelklick. Lokal z. B.:
 
+```bash
+python3 -m http.server 8747 --directory .
+# dann http://localhost:8747 öffnen
+```
+
+Beim ersten Login werden vorhandene lokale Daten in die Cloud übernommen.
 Zum Ausprobieren: **Einstellungen → Beispieldaten laden.**
+
+### Konfiguration
+`assets/js/config.js` enthält `SUPABASE_URL` + `SUPABASE_ANON_KEY` (öffentlich – RLS schützt die
+Daten). Das DB-Schema inkl. RLS-Policies liegt in [`supabase/schema.sql`](supabase/schema.sql).
 
 ---
 

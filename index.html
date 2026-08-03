@@ -4,11 +4,37 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Carlos – Personal ERP</title>
-  <meta name="description" content="Carlos – persönliches Vermögens-ERP, Privat & Business. Lokal und privat.">
+  <meta name="description" content="Carlos – persönliches Vermögens-ERP, Privat & Business. Mit Login & Cloud-Sync (Supabase).">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230070f2'/><circle cx='16' cy='12' r='5' fill='white'/><path d='M6.5 26.5c0-5 4.3-7.5 9.5-7.5s9.5 2.5 9.5 7.5z' fill='white'/></svg>">
-  <link rel="stylesheet" href="assets/css/styles.css?v=3.6">
+  <link rel="stylesheet" href="assets/css/styles.css?v=3.8">
 </head>
 <body>
+  <!-- ============ Login ============ -->
+  <div class="auth-overlay checking" id="authOverlay">
+    <div class="auth-card">
+      <div class="auth-brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM5 20c0-3.6 3.1-6 7-6s7 2.4 7 6"/>
+          </svg>
+        </span>
+        <div class="brand-text"><span class="brand-name">Carlos</span><span class="brand-sub">Personal ERP</span></div>
+      </div>
+      <div class="auth-checking-msg">Lädt…</div>
+      <form id="authForm" class="auth-form" autocomplete="on">
+        <h1 class="auth-title" id="authTitle">Anmelden</h1>
+        <p class="auth-lead">Melde dich an, um auf dein Personal ERP zuzugreifen.</p>
+        <div class="form-row"><label for="authEmail">E-Mail</label><input id="authEmail" type="email" required autocomplete="username" placeholder="du@example.com"></div>
+        <div class="form-row"><label for="authPassword">Passwort</label><input id="authPassword" type="password" required minlength="6" autocomplete="current-password" placeholder="••••••••"></div>
+        <p class="auth-error" id="authError"></p>
+        <p class="auth-info" id="authInfo"></p>
+        <button type="submit" class="btn btn-primary auth-submit" id="authSubmit">Anmelden</button>
+        <button type="button" class="btn btn-ghost auth-toggle" data-auth="toggle-mode" id="authToggle">Neu hier? Konto erstellen</button>
+      </form>
+      <p class="auth-foot">🔒 Deine Daten sind durch Row Level Security geschützt – nur dein Login hat Zugriff.</p>
+    </div>
+  </div>
+
   <div class="layout">
     <!-- ============ Sidebar ============ -->
     <aside class="sidebar" id="sidebar">
@@ -28,7 +54,11 @@
         <button class="nav-leaf" data-action="nav" data-section="einstellungen">
           <span class="nav-ico" id="icoSettings"></span> Einstellungen
         </button>
-        <p class="privacy">🔒 Lokal &amp; privat – nichts verlässt dein Gerät.</p>
+        <div class="user-bar">
+          <span class="user-email" id="userEmail"></span>
+          <button class="user-logout" data-auth="logout" title="Abmelden">Abmelden</button>
+        </div>
+        <p class="privacy">🔒 Zugriff nur mit deinem Login – geschützt per Row Level Security.</p>
       </div>
     </aside>
 
@@ -48,8 +78,11 @@
     <div class="modal" id="modal" role="dialog" aria-modal="true"></div>
   </div>
 
-  <script src="assets/js/store.js?v=3.6"></script>
-  <script src="assets/js/charts.js?v=3.6"></script>
-  <script src="assets/js/app.js?v=3.6"></script>
+  <script src="assets/js/config.js?v=3.8"></script>
+  <script src="assets/vendor/supabase.js"></script>
+  <script src="assets/js/store.js?v=3.8"></script>
+  <script src="assets/js/charts.js?v=3.8"></script>
+  <script src="assets/js/app.js?v=3.8"></script>
+  <script src="assets/js/auth.js?v=3.8"></script>
 </body>
 </html>

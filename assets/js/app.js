@@ -40,7 +40,8 @@
     { section: "zentrale", label: "Zentrale Daten", icon: "zentrale", children: [
       { kat: "person", label: "Carlos Schäuble" },
       { kat: "partner", label: "Business Partner" },
-      { kat: "buchungskreise", label: "Buchungskreise" }
+      { kat: "buchungskreise", label: "Buchungskreise" },
+      { kat: "kontenplaene", label: "Kontenpläne" }
     ] },
     { section: "privat", label: "Privat", icon: "privat", children: [
       { kat: "bank", label: "Bankkonten" },
@@ -71,7 +72,7 @@
     { section: "termine", label: "Termine", icon: "termine" }
   ];
 
-  const ui = { section: "uebersicht", kat: null, stream: null, partnerId: null, filter: "alles", expanded: { zentrale: true, privat: true, geschaeftlich: true, investments: true, stream1: true, stream2: true }, chat: [] };
+  const ui = { section: "uebersicht", kat: null, stream: null, partnerId: null, kontenplanId: null, filter: "alles", expanded: { zentrale: true, privat: true, geschaeftlich: true, investments: true, stream1: true, stream2: true }, chat: [] };
   let assetDocs = []; // Arbeitskopie der Dokumente im geöffneten Asset-Formular
 
   // Welche Assets erlauben Datei-Anhänge (z. B. Mietvertrag)? → vermietete KG-Immobilien
@@ -564,6 +565,63 @@
       '<p class="panel-note">Nächster Schritt (später): Konten, Kosten und Einnahmen einem Buchungskreis zuordnen und je Buchungskreis auswerten.</p>';
   }
 
+  /* ================= KONTENPLÄNE (SAP) + SACHKONTEN ================= */
+  function kontenplaeneHtml() {
+    const list = Store.getKontenplaene();
+    const right = '<button class="btn btn-primary" data-action="add-kontenplan">＋ Kontenplan</button>';
+    if (!list.length) {
+      return head("Zentrale Daten", "Kontenpläne", right) +
+        emptyState("KP", "Noch keine Kontenpläne", "Lege nach SAP-Logik Kontenpläne an, ordne ihnen Buchungskreise zu und erfasse darin Sachkonten – die Basis für spätere Auswertungen (z. B. Bilanz/GuV je Buchungskreis).",
+          '<button class="btn btn-primary" data-action="add-kontenplan">＋ Ersten Kontenplan anlegen</button>');
+    }
+    const rows = list.map(function (k) {
+      const nSk = (k.sachkonten || []).length;
+      const bkBadges = (k.buchungskreise || []).map(function (s) { return '<span class="bk-key">' + esc(s) + "</span>"; }).join(" ");
+      const sub = nSk ? (nSk + (nSk === 1 ? " Sachkonto" : " Sachkonten")) : '<span class="muted">Keine Sachkonten</span>';
+      return '<div class="ledger-row" data-action="open-kontenplan" data-id="' + k.id + '">' +
+        '<span class="lr-icon">' + icon("buchungskreis") + "</span>" +
+        '<span class="lr-main"><span class="lr-name"><span class="bk-key">' + esc(k.key) + "</span>" + esc(k.name) + "</span>" +
+        '<span class="lr-sub">' + sub + (bkBadges ? "  ·  " + bkBadges : "") + "</span></span>" +
+        '<span class="lr-change">›</span></div>';
+    }).join("");
+    return head("Zentrale Daten", "Kontenpläne", right) + '<div class="panel">' + rows + "</div>" +
+      '<p class="panel-note">Ein Kontenplan bündelt Sachkonten und gilt für die zugeordneten Buchungskreise (SAP-Logik). Klick auf einen Kontenplan öffnet seine Sachkonten.</p>';
+  }
+
+  function kontenplanDetailHtml(id) {
+    const k = Store.getKontenplan(id);
+    if (!k) { ui.kontenplanId = null; return kontenplaeneHtml(); }
+    const right = '<div class="btn-row">' +
+      '<button class="btn btn-ghost" data-action="kontenplan-back">← Zurück</button>' +
+      '<button class="btn" data-action="edit-kontenplan" data-id="' + k.id + '">Bearbeiten</button></div>';
+
+    const bkBadges = (k.buchungskreise || []).length
+      ? k.buchungskreise.map(function (s) { return '<span class="bk-key">' + esc(s) + "</span>"; }).join(" ")
+      : '<span class="muted">Keinem Buchungskreis zugeordnet</span>';
+    const info = '<div class="panel"><div class="info-row"><span class="muted">Gilt für Buchungskreise:</span>&nbsp; ' + bkBadges + "</div></div>";
+
+    const sks = (k.sachkonten || []).slice().sort(function (a, b) { return (a.nummer || "").localeCompare(b.nummer || "", "de", { numeric: true }); });
+    const addBtn = '<button class="btn btn-sm btn-primary" data-action="add-sachkonto">＋ Sachkonto</button>';
+    let skPanel;
+    if (!sks.length) {
+      skPanel = '<div class="panel"><div class="panel-head"><h3 class="panel-title">Sachkonten</h3>' + addBtn + "</div>" +
+        '<p class="muted" style="padding:6px 2px">Noch keine Sachkonten. Lege dein erstes an (z. B. 1000 Kasse, 4400 Mieterträge).</p></div>';
+    } else {
+      const rows = sks.map(function (s) {
+        return '<tr data-action="edit-sachkonto" data-id="' + s.id + '" style="cursor:pointer">' +
+          '<td class="num">' + esc(s.nummer || "–") + "</td>" +
+          "<td>" + esc(s.bezeichnung || "–") + "</td>" +
+          "<td>" + (s.art ? '<span class="pill">' + esc(s.art) + "</span>" : "–") + "</td>" +
+          '<td class="num"><button class="icon-btn" style="width:28px;height:28px;font-size:12px" data-action="delete-sachkonto" data-id="' + s.id + '" title="Löschen">✕</button></td>' +
+          "</tr>";
+      }).join("");
+      skPanel = '<div class="panel"><div class="panel-head"><h3 class="panel-title">Sachkonten (' + sks.length + ")</h3>" + addBtn + "</div>" +
+        '<div style="overflow-x:auto"><table class="ptable"><thead><tr><th class="num">Konto-Nr.</th><th>Bezeichnung</th><th>Kontoart</th><th></th></tr></thead>' +
+        "<tbody>" + rows + "</tbody></table></div></div>";
+    }
+    return head("Kontenplan", esc(k.key) + " · " + esc(k.name), right) + info + skPanel;
+  }
+
   function partnerHtml() {
     const partners = Store.getPartners().slice().sort(function (a, b) { return a.name.localeCompare(b.name, "de"); });
     const right = '<button class="btn btn-primary" data-action="add-partner">＋ Partner</button>';
@@ -915,7 +973,7 @@
       '<button class="btn btn-danger" data-action="clear-all">Alles löschen</button></div></div>' +
 
       '<div class="panel"><div class="panel-head"><h3 class="panel-title">Über</h3></div>' +
-      '<p class="panel-note">Carlos · Personal ERP – Version 4.1. Vermögenscockpit mit Login &amp; Cloud-Sync (Supabase, RLS).<br>' +
+      '<p class="panel-note">Carlos · Personal ERP – Version 4.2. Vermögenscockpit mit Login &amp; Cloud-Sync (Supabase, RLS).<br>' +
       "Geplant: automatische Bankanbindung, Live-Kurse, Dokumenten-Upload &amp; -Suche (RAG) für den Chatbot.</p></div>";
   }
 
@@ -1161,6 +1219,69 @@
     closeModal(); render();
   }
 
+  function openKontenplanForm(id) {
+    const k = id ? Store.getKontenplan(id) : null;
+    const assigned = k ? (k.buchungskreise || []) : [];
+    const bks = Store.getBuchungskreise();
+    const bkChecks = bks.length
+      ? bks.map(function (b) {
+          const checked = assigned.indexOf(b.schluessel) >= 0 ? " checked" : "";
+          return '<label class="check-item"><input type="checkbox" class="kp-bk-check" value="' + esc(b.schluessel) + '"' + checked + '><span class="bk-key">' + esc(b.schluessel) + "</span> " + esc(b.name) + "</label>";
+        }).join("")
+      : '<span class="hint">Noch keine Buchungskreise – lege sie zuerst unter Buchungskreise an.</span>';
+    openModal(
+      '<div class="modal-head"><h3>' + (k ? esc(k.key + " · " + k.name) : "Neuer Kontenplan") + '</h3><button class="icon-btn" data-action="close-modal">✕</button></div>' +
+      '<form id="kpForm"><div class="modal-body"><div class="form-grid">' +
+      '<div class="form-row"><label for="f_kpkey">Kontenplan-ID *</label><input id="f_kpkey" type="text" maxlength="10" required placeholder="z. B. IKR, GKR, 1000" value="' + esc(k ? k.key : "") + '"></div>' +
+      '<div class="form-row full"><label for="f_kpname">Bezeichnung *</label><input id="f_kpname" type="text" required placeholder="z. B. Industriekontenrahmen" value="' + esc(k ? k.name : "") + '"></div>' +
+      '<div class="form-row full"><label>Buchungskreise</label><div class="check-list">' + bkChecks + '</div><span class="hint">Für welche Buchungskreise gilt dieser Kontenplan?</span></div>' +
+      "</div></div><div class=\"modal-foot\">" + (k ? '<button type="button" class="btn btn-danger" data-action="delete-kontenplan" data-id="' + k.id + '">Löschen</button>' : "") +
+      '<span class="spacer"></span><button type="button" class="btn btn-ghost" data-action="close-modal">Abbrechen</button>' +
+      '<button type="submit" class="btn btn-primary">' + (k ? "Speichern" : "Anlegen") + "</button></div></form>"
+    );
+    el("modal").dataset.form = "kp"; el("modal").dataset.editId = id || "";
+    el("f_kpkey").focus();
+  }
+  function submitKontenplanForm() {
+    const m = el("modal");
+    const keyEl = el("f_kpkey"), nameEl = el("f_kpname");
+    if (!keyEl.value.trim()) { keyEl.classList.add("field-err"); keyEl.focus(); return; }
+    if (!nameEl.value.trim()) { nameEl.classList.add("field-err"); nameEl.focus(); return; }
+    const bkSel = Array.prototype.slice.call(document.querySelectorAll(".kp-bk-check:checked")).map(function (c) { return c.value; });
+    const data = { key: keyEl.value.trim(), name: nameEl.value.trim(), buchungskreise: bkSel };
+    if (m.dataset.editId) Store.updateKontenplan(m.dataset.editId, data);
+    else { const nk = Store.addKontenplan(data); ui.kontenplanId = nk.id; }
+    closeModal(); render();
+  }
+
+  function openSachkontoForm(id) {
+    const kp = Store.getKontenplan(ui.kontenplanId);
+    const s = (kp && id) ? (kp.sachkonten || []).find(function (x) { return x.id === id; }) : null;
+    const artOpts = '<option value="">– Kontoart –</option>' + Store.KONTOARTEN.map(function (a) { return '<option value="' + a + '"' + (s && s.art === a ? " selected" : "") + ">" + a + "</option>"; }).join("");
+    openModal(
+      '<div class="modal-head"><h3>' + (s ? "Sachkonto bearbeiten" : "Neues Sachkonto") + '</h3><button class="icon-btn" data-action="close-modal">✕</button></div>' +
+      '<form id="sachkontoForm"><div class="modal-body"><div class="form-grid">' +
+      '<div class="form-row"><label for="f_sknummer">Konto-Nr. *</label><input id="f_sknummer" type="text" maxlength="20" required placeholder="z. B. 4400" value="' + esc(s ? s.nummer : "") + '"></div>' +
+      '<div class="form-row"><label for="f_skart">Kontoart</label><select id="f_skart">' + artOpts + "</select></div>" +
+      '<div class="form-row full"><label for="f_skbez">Bezeichnung *</label><input id="f_skbez" type="text" required placeholder="z. B. Mieterträge" value="' + esc(s ? s.bezeichnung : "") + '"></div>' +
+      "</div></div><div class=\"modal-foot\">" + (s ? '<button type="button" class="btn btn-danger" data-action="delete-sachkonto" data-id="' + s.id + '">Löschen</button>' : "") +
+      '<span class="spacer"></span><button type="button" class="btn btn-ghost" data-action="close-modal">Abbrechen</button>' +
+      '<button type="submit" class="btn btn-primary">' + (s ? "Speichern" : "Anlegen") + "</button></div></form>"
+    );
+    el("modal").dataset.form = "sachkonto"; el("modal").dataset.editId = id || "";
+    el("f_sknummer").focus();
+  }
+  function submitSachkontoForm() {
+    const m = el("modal");
+    const nrEl = el("f_sknummer"), bezEl = el("f_skbez");
+    if (!nrEl.value.trim()) { nrEl.classList.add("field-err"); nrEl.focus(); return; }
+    if (!bezEl.value.trim()) { bezEl.classList.add("field-err"); bezEl.focus(); return; }
+    const data = { nummer: nrEl.value.trim(), bezeichnung: bezEl.value.trim(), art: el("f_skart").value };
+    if (m.dataset.editId) Store.updateSachkonto(ui.kontenplanId, m.dataset.editId, data);
+    else Store.addSachkonto(ui.kontenplanId, data);
+    closeModal(); render();
+  }
+
   /* ================= Datei-Download / Import ================= */
   function download(name, content, mime) {
     const blob = new Blob([content], { type: mime || "text/plain;charset=utf-8" });
@@ -1247,6 +1368,7 @@
       case "zentrale":
         if (ui.kat === "partner") return ui.partnerId ? partnerDetailHtml(ui.partnerId) : partnerHtml();
         if (ui.kat === "buchungskreise") return buchungskreiseHtml();
+        if (ui.kat === "kontenplaene") return ui.kontenplanId ? kontenplanDetailHtml(ui.kontenplanId) : kontenplaeneHtml();
         return personHtml();
       case "privat":
         if (!ui.kat) return bereichOverviewHtml("privat");
@@ -1309,6 +1431,7 @@
         ui.kat = target.dataset.kat || null;
         ui.stream = target.dataset.stream || null;
         ui.partnerId = null;
+        ui.kontenplanId = null;
         if (ui.expanded.hasOwnProperty(ui.section)) ui.expanded[ui.section] = true;
         render(); break;
       case "toggle-group":
@@ -1341,6 +1464,14 @@
       case "add-bk": openBuchungskreisForm(null); break;
       case "edit-bk": openBuchungskreisForm(id); break;
       case "delete-bk": if (confirm("Diesen Buchungskreis löschen?")) { Store.deleteBuchungskreis(id); closeModal(); render(); } break;
+      case "add-kontenplan": openKontenplanForm(null); break;
+      case "open-kontenplan": ui.kontenplanId = id; render(); break;
+      case "kontenplan-back": ui.kontenplanId = null; render(); break;
+      case "edit-kontenplan": openKontenplanForm(id); break;
+      case "delete-kontenplan": if (confirm("Diesen Kontenplan inkl. aller Sachkonten wirklich löschen?")) { Store.deleteKontenplan(id); ui.kontenplanId = null; closeModal(); render(); } break;
+      case "add-sachkonto": openSachkontoForm(null); break;
+      case "edit-sachkonto": openSachkontoForm(id); break;
+      case "delete-sachkonto": if (confirm("Dieses Sachkonto löschen?")) { Store.deleteSachkonto(ui.kontenplanId, id); closeModal(); render(); } break;
       case "save-snapshot": Store.addSnapshot(); render(); break;
       case "delete-snapshot": if (confirm("Snapshot löschen?")) { Store.deleteSnapshot(id); render(); } break;
       case "chat-suggest": sendChat(target.dataset.q); break;
@@ -1358,6 +1489,8 @@
     else if (e.target.id === "partnerForm") { e.preventDefault(); submitPartnerForm(); }
     else if (e.target.id === "terminForm") { e.preventDefault(); submitTerminForm(); }
     else if (e.target.id === "bkForm") { e.preventDefault(); submitBuchungskreisForm(); }
+    else if (e.target.id === "kpForm") { e.preventDefault(); submitKontenplanForm(); }
+    else if (e.target.id === "sachkontoForm") { e.preventDefault(); submitSachkontoForm(); }
     else if (e.target.id === "noteForm") { e.preventDefault(); const t = el("f_note").value.trim(); if (t) { Store.addPartnerNote(ui.partnerId, t); render(); } }
     else if (e.target.id === "chatForm") { e.preventDefault(); const i = el("chatInput"); sendChat(i.value); }
   }

@@ -138,6 +138,7 @@ const Store = (function () {
     assets: [],
     partners: [],
     buchungskreise: [],
+    kontenplaene: [],
     termine: [],
     snapshots: [],
     settings: {}
@@ -159,6 +160,7 @@ const Store = (function () {
           assets: Array.isArray(p.assets) ? p.assets : [],
           partners: Array.isArray(p.partners) ? p.partners : [],
           buchungskreise: Array.isArray(p.buchungskreise) ? p.buchungskreise : [],
+          kontenplaene: Array.isArray(p.kontenplaene) ? p.kontenplaene : [],
           termine: Array.isArray(p.termine) ? p.termine : [],
           snapshots: Array.isArray(p.snapshots) ? p.snapshots : [],
           settings: p.settings || {}
@@ -194,6 +196,7 @@ const Store = (function () {
       assets: Array.isArray(obj.assets) ? obj.assets : [],
       partners: Array.isArray(obj.partners) ? obj.partners : [],
       buchungskreise: Array.isArray(obj.buchungskreise) ? obj.buchungskreise : [],
+      kontenplaene: Array.isArray(obj.kontenplaene) ? obj.kontenplaene : [],
       termine: Array.isArray(obj.termine) ? obj.termine : [],
       snapshots: Array.isArray(obj.snapshots) ? obj.snapshots : [],
       settings: obj.settings || {}
@@ -466,6 +469,45 @@ const Store = (function () {
   }
   function deleteBuchungskreis(id) { state.buchungskreise = (state.buchungskreise || []).filter(function (b) { return b.id !== id; }); save(); }
 
+  /* ---- Kontenpläne (SAP) + Sachkonten ---- */
+  const KONTOARTEN = ["Aktiva", "Passiva", "Ertrag", "Aufwand"];
+  function getKontenplaene() {
+    return (state.kontenplaene || []).slice().sort(function (a, b) { return (a.key || "").localeCompare(b.key || "", "de"); });
+  }
+  function getKontenplan(id) { return (state.kontenplaene || []).find(function (k) { return k.id === id; }); }
+  function addKontenplan(data) {
+    const k = { id: uid(), key: data.key || "", name: data.name || "", buchungskreise: Array.isArray(data.buchungskreise) ? data.buchungskreise : [], sachkonten: [], createdAt: nowIso() };
+    if (!Array.isArray(state.kontenplaene)) state.kontenplaene = [];
+    state.kontenplaene.push(k); save(); return k;
+  }
+  function updateKontenplan(id, data) {
+    const k = getKontenplan(id);
+    if (!k) return;
+    k.key = data.key || ""; k.name = data.name || "";
+    if (data.buchungskreise !== undefined) k.buchungskreise = Array.isArray(data.buchungskreise) ? data.buchungskreise : [];
+    save();
+  }
+  function deleteKontenplan(id) { state.kontenplaene = (state.kontenplaene || []).filter(function (k) { return k.id !== id; }); save(); }
+  function addSachkonto(kpId, data) {
+    const k = getKontenplan(kpId);
+    if (!k) return;
+    if (!Array.isArray(k.sachkonten)) k.sachkonten = [];
+    k.sachkonten.push({ id: uid(), nummer: data.nummer || "", bezeichnung: data.bezeichnung || "", art: data.art || "" });
+    save();
+  }
+  function updateSachkonto(kpId, skId, data) {
+    const k = getKontenplan(kpId);
+    if (!k || !Array.isArray(k.sachkonten)) return;
+    const s = k.sachkonten.find(function (x) { return x.id === skId; });
+    if (s) { s.nummer = data.nummer || ""; s.bezeichnung = data.bezeichnung || ""; s.art = data.art || ""; save(); }
+  }
+  function deleteSachkonto(kpId, skId) {
+    const k = getKontenplan(kpId);
+    if (!k || !Array.isArray(k.sachkonten)) return;
+    k.sachkonten = k.sachkonten.filter(function (s) { return s.id !== skId; });
+    save();
+  }
+
   /* ---------------------------------------------------------
      News (kuratierter Beispiel-Feed – live-Feed folgt später)
      --------------------------------------------------------- */
@@ -510,6 +552,7 @@ const Store = (function () {
       assets: p.assets,
       partners: Array.isArray(p.partners) ? p.partners : [],
       buchungskreise: Array.isArray(p.buchungskreise) ? p.buchungskreise : [],
+      kontenplaene: Array.isArray(p.kontenplaene) ? p.kontenplaene : [],
       termine: Array.isArray(p.termine) ? p.termine : [],
       snapshots: Array.isArray(p.snapshots) ? p.snapshots : [],
       settings: p.settings || {}
@@ -540,7 +583,7 @@ const Store = (function () {
   }
 
   function clearAll() {
-    state.assets = []; state.partners = []; state.buchungskreise = []; state.termine = []; state.snapshots = [];
+    state.assets = []; state.partners = []; state.buchungskreise = []; state.kontenplaene = []; state.termine = []; state.snapshots = [];
     save();
   }
 
@@ -643,6 +686,8 @@ const Store = (function () {
     addPartnerDocument: addPartnerDocument, deletePartnerDocument: deletePartnerDocument,
     getTermine: getTermine, getTermin: getTermin, addTermin: addTermin, updateTermin: updateTermin, deleteTermin: deleteTermin,
     getBuchungskreise: getBuchungskreise, getBuchungskreis: getBuchungskreis, addBuchungskreis: addBuchungskreis, updateBuchungskreis: updateBuchungskreis, deleteBuchungskreis: deleteBuchungskreis,
+    getKontenplaene: getKontenplaene, getKontenplan: getKontenplan, addKontenplan: addKontenplan, updateKontenplan: updateKontenplan, deleteKontenplan: deleteKontenplan,
+    addSachkonto: addSachkonto, updateSachkonto: updateSachkonto, deleteSachkonto: deleteSachkonto, KONTOARTEN: KONTOARTEN,
     getNews: getNews,
     getSnapshots: getSnapshots, addSnapshot: addSnapshot, deleteSnapshot: deleteSnapshot,
     // Export & Cloud-Sync

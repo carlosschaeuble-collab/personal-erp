@@ -186,6 +186,9 @@ h1, h2, h3 { font-family: var(--sans); }
 .kpis-sub { margin-top: -10px; }
 .kpis-sub .kpi { padding: 12px 16px; background: transparent; box-shadow: none; border-style: dashed; }
 .kpis-sub .kpi-value { font-size: 19px; font-weight: 400; }
+.check-list { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; max-height: 240px; overflow-y: auto; }
+.check-item { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
+.check-item input { width: 16px; height: 16px; flex: none; }
 
 /* ---------------- Panels ---------------- */
 .panel {

@@ -100,6 +100,12 @@ const Store = (function () {
   };
 
   // Vermietete KG-Immobilien: erweiterte Felder (Basis für Cashflow & Bilanz)
+  const STREAMS = [
+    { key: "stream1", label: "Stream 1: KG Rent" },
+    { key: "stream2", label: "Stream 2: Marbella Rent" }
+  ];
+  function streamOf(a) { return (a && a.fields && a.fields.stream) || "stream1"; }
+
   const KG_IMMO_SCHEMA = [
     { k: "name", label: "Bezeichnung / Adresse", type: "text", req: true },
     { k: "kaufpreis", label: "Kaufpreis (€)", type: "num" },
@@ -111,7 +117,8 @@ const Store = (function () {
     { k: "instandhaltung", label: "Instandhaltungsrücklage / Monat (€)", type: "num" },
     { k: "einheiten", label: "Anzahl Einheiten", type: "num" },
     { k: "mieter", label: "Mieter (Business Partner)", type: "partner" },
-    { k: "mietbeginn", label: "Mieter seit", type: "date" }
+    { k: "mietbeginn", label: "Mieter seit", type: "date" },
+    { k: "stream", label: "Stream", type: "stream" }
   ];
 
   function schemaFor(bereich, kategorie) {
@@ -320,11 +327,14 @@ const Store = (function () {
   /* ---------------------------------------------------------
      KG-Auswertungen (Cashflow & Bilanz/GuV) aus vermieteten Immobilien
      --------------------------------------------------------- */
-  function kgImmobilien() { return getAssets({ bereich: "geschaeftlich", kategorie: "immobilien" }); }
+  function kgImmobilien(stream) {
+    return getAssets({ bereich: "geschaeftlich", kategorie: "immobilien" })
+      .filter(function (a) { return !stream || streamOf(a) === stream; });
+  }
 
-  function kgCashflow() {
+  function kgCashflow(stream) {
     let kaltmiete = 0, nebenkosten = 0, kreditrate = 0, instandhaltung = 0, einheiten = 0;
-    kgImmobilien().forEach(function (a) {
+    kgImmobilien(stream).forEach(function (a) {
       const f = a.fields || {};
       kaltmiete += num(f.kaltmiete);
       nebenkosten += num(f.nebenkosten);
@@ -626,7 +636,7 @@ const Store = (function () {
     // Assets
     getAssets: getAssets, getAsset: getAsset, addAsset: addAsset, updateAsset: updateAsset, deleteAsset: deleteAsset,
     computeValue: computeValue, computeChange: computeChange, computeCashflow: computeCashflow, titleOf: titleOf, monthsSince: monthsSince,
-    totals: totals, kgCashflow: kgCashflow, kgBilanz: kgBilanz, kgImmobilien: kgImmobilien,
+    totals: totals, kgCashflow: kgCashflow, kgBilanz: kgBilanz, kgImmobilien: kgImmobilien, streamOf: streamOf, STREAMS: STREAMS,
     // Partner / Termine / News / Snapshots
     getPartners: getPartners, getPartner: getPartner, addPartner: addPartner, updatePartner: updatePartner, deletePartner: deletePartner,
     addPartnerNote: addPartnerNote, deletePartnerNote: deletePartnerNote,

@@ -54,10 +54,15 @@
     ] },
     { section: "geschaeftlich", label: "Business", icon: "geschaeftlich", children: [
       { kat: "bank", label: "Bankkonten" },
-      { group: "stream1", label: "Stream 1: Real Estate", children: [
-        { kat: "immobilienbestand", label: "Immobilien" },
-        { kat: "immobilien", label: "Vermietung" },
-        { kat: "einnahmen_ausgaben", label: "Einnahmen / Ausgaben" }
+      { group: "stream1", label: "Stream 1: KG Rent", children: [
+        { kat: "immobilienbestand", stream: "stream1", label: "Immobilien" },
+        { kat: "immobilien", stream: "stream1", label: "Vermietung" },
+        { kat: "einnahmen_ausgaben", stream: "stream1", label: "Einnahmen / Ausgaben" }
+      ] },
+      { group: "stream2", label: "Stream 2: Marbella Rent", children: [
+        { kat: "immobilienbestand", stream: "stream2", label: "Immobilien" },
+        { kat: "immobilien", stream: "stream2", label: "Vermietung" },
+        { kat: "einnahmen_ausgaben", stream: "stream2", label: "Einnahmen / Ausgaben" }
       ] },
       { kat: "bilanz", label: "Bilanz / GuV" }, { kat: "cashflow", label: "Cashflow" }
     ] },
@@ -66,7 +71,7 @@
     { section: "termine", label: "Termine", icon: "termine" }
   ];
 
-  const ui = { section: "uebersicht", kat: null, partnerId: null, filter: "alles", expanded: { zentrale: true, privat: true, geschaeftlich: true, investments: true, stream1: true }, chat: [] };
+  const ui = { section: "uebersicht", kat: null, stream: null, partnerId: null, filter: "alles", expanded: { zentrale: true, privat: true, geschaeftlich: true, investments: true, stream1: true, stream2: true }, chat: [] };
   let assetDocs = []; // Arbeitskopie der Dokumente im geöffneten Asset-Formular
 
   // Welche Assets erlauben Datei-Anhänge (z. B. Mietvertrag)? → vermietete KG-Immobilien
@@ -330,19 +335,22 @@
   }
 
   /* ================= KATEGORIE-LISTE ================= */
-  function katListHtml(bereich, kat) {
+  function katListHtml(bereich, kat, stream) {
     const meta = Store.KATEGORIEN[kat];
     const label = (bereich === "geschaeftlich" && kat === "immobilien") ? "Vermietung" : meta.label;
-    const assets = Store.getAssets({ bereich: bereich, kategorie: kat }).sort(function (a, b) { return Store.computeValue(b) - Store.computeValue(a); });
+    let assets = Store.getAssets({ bereich: bereich, kategorie: kat });
+    if (stream) assets = assets.filter(function (a) { return Store.streamOf(a) === stream; });
+    assets = assets.sort(function (a, b) { return Store.computeValue(b) - Store.computeValue(a); });
     const sum = assets.reduce(function (s, a) { return s + Store.computeValue(a); }, 0);
 
-    const right = '<button class="btn btn-primary" data-action="add-asset" data-bereich="' + bereich + '" data-kat="' + kat + '">＋ Hinzufügen</button>';
-    const eyebrow = Store.BEREICHE[bereich].label;
+    const streamAttr = stream ? ' data-stream="' + stream + '"' : "";
+    const right = '<button class="btn btn-primary" data-action="add-asset" data-bereich="' + bereich + '" data-kat="' + kat + '"' + streamAttr + ">＋ Hinzufügen</button>";
+    const eyebrow = stream ? streamLabel(stream) : Store.BEREICHE[bereich].label;
 
     if (!assets.length) {
       return head(eyebrow, label, right) +
         emptyState(meta.label.charAt(0), "Noch keine " + label, "Füge deine erste Position in dieser Kategorie hinzu.",
-          '<button class="btn btn-primary" data-action="add-asset" data-bereich="' + bereich + '" data-kat="' + kat + '">＋ Erste Position anlegen</button>');
+          '<button class="btn btn-primary" data-action="add-asset" data-bereich="' + bereich + '" data-kat="' + kat + '"' + streamAttr + ">＋ Erste Position anlegen</button>");
     }
 
     const rows = assets.map(function (a) { return assetRow(a, false); }).join("");
@@ -695,14 +703,96 @@
       '<p class="panel-note">Abgeleitet aus deinen vermieteten KG-Objekten und KG-Bankkonten.</p>';
   }
 
-  /* ===== Stream 1: Real Estate – Platzhalter (Inhalt folgt) ===== */
-  function reImmobilienHtml() {
-    return head("Business", "Immobilien", "") +
-      emptyState("🏢", "Immobilien", "Platzhalter für die Immobilien dieses Streams (z. B. Objekte im Bestand). Was genau hier hineinkommt, legen wir als Nächstes fest.", "");
+  /* ===== Streams (Real Estate) ===== */
+  function streamLabel(key) {
+    const s = Store.STREAMS.filter(function (x) { return x.key === key; })[0];
+    return s ? s.label : "Business";
   }
-  function einnahmenAusgabenHtml() {
-    return head("Business", "Einnahmen / Ausgaben", "") +
-      emptyState("±", "Einnahmen / Ausgaben", "Platzhalter für Einnahmen und Ausgaben dieses Streams. Inhalt folgt.", "");
+  function nz(v) { return Number(v) || 0; }
+  function eurOrDash(v) { return (v === "" || v === null || v === undefined) ? "–" : fmtEur(nz(v)); }
+
+  // Immobilien-Übersicht eines Streams: alle Objekte mit allen Kennzahlen
+  function reImmobilienHtml(stream) {
+    const props = Store.kgImmobilien(stream);
+    const addBtn = '<button class="btn btn-primary" data-action="add-asset" data-bereich="geschaeftlich" data-kat="immobilien" data-stream="' + stream + '">＋ Objekt</button>';
+    if (!props.length) {
+      return head(streamLabel(stream), "Immobilien", addBtn) +
+        emptyState("🏢", "Noch keine Objekte", "Diesem Stream sind noch keine Immobilien zugeordnet. Lege das erste Objekt an – oder ordne ein bestehendes Objekt über sein Formular (Feld Stream) diesem Stream zu.",
+          '<button class="btn btn-primary" data-action="add-asset" data-bereich="geschaeftlich" data-kat="immobilien" data-stream="' + stream + '">＋ Objekt hinzufügen</button>');
+    }
+    let mw = 0, rs = 0, km = 0, eh = 0;
+    props.forEach(function (p) { const f = p.fields || {}; mw += nz(f.marktwert); rs += nz(f.restschuld); km += nz(f.kaltmiete); eh += nz(f.einheiten); });
+
+    const kpis = '<div class="kpis kpis-3">' +
+      kpi("Objekte", props.length, { foot: eh ? fmtNum(eh) + " Einheiten" : "erfasst" }) +
+      kpi("Marktwert", fmtEur(mw), { accent: true, foot: "gesamt" }) +
+      kpi("Eigenkapital", fmtEur(mw - rs), { foot: "Marktwert − Restschuld" }) +
+      "</div>";
+
+    const rows = props.map(function (p) {
+      const f = p.fields || {};
+      const wert = nz(f.marktwert) - nz(f.restschuld);
+      return '<tr data-action="edit-asset" data-id="' + p.id + '" style="cursor:pointer">' +
+        "<td>" + esc(f.name || "–") + "</td>" +
+        '<td class="num">' + (f.einheiten ? fmtNum(f.einheiten) : "–") + "</td>" +
+        '<td class="num">' + eurOrDash(f.kaufpreis) + "</td>" +
+        '<td class="num">' + eurOrDash(f.marktwert) + "</td>" +
+        '<td class="num">' + eurOrDash(f.restschuld) + "</td>" +
+        '<td class="num">' + fmtEur(wert) + "</td>" +
+        '<td class="num">' + eurOrDash(f.kaltmiete) + "</td>" +
+        "<td>" + (f.mieter ? esc(f.mieter) : "–") + "</td>" +
+        "</tr>";
+    }).join("");
+    const totalRow = '<tr class="total"><td>Summe</td>' +
+      '<td class="num">' + (eh ? fmtNum(eh) : "") + "</td>" +
+      '<td class="num"></td>' +
+      '<td class="num">' + fmtEur(mw) + "</td>" +
+      '<td class="num">' + fmtEur(rs) + "</td>" +
+      '<td class="num">' + fmtEur(mw - rs) + "</td>" +
+      '<td class="num">' + fmtEur(km) + '</td><td></td></tr>';
+    const table = '<div class="panel"><div class="panel-head"><h3 class="panel-title">Objektübersicht</h3></div>' +
+      '<div style="overflow-x:auto"><table class="ptable"><thead><tr>' +
+      '<th>Objekt</th><th class="num">Einh.</th><th class="num">Kaufpreis</th><th class="num">Marktwert</th><th class="num">Restschuld</th><th class="num">Wert</th><th class="num">Kaltmiete/M</th><th>Mieter</th>' +
+      "</tr></thead><tbody>" + rows + totalRow + "</tbody></table></div>" +
+      '<p class="panel-note">Klick auf ein Objekt öffnet alle Details (Nebenkosten, Kreditrate, Instandhaltung, Mietbeginn, Stream …).</p></div>';
+    return head(streamLabel(stream), "Immobilien", addBtn) + kpis + table;
+  }
+
+  // Einnahmen / Ausgaben eines Streams als Jahresübersicht
+  function einnahmenAusgabenHtml(stream) {
+    const props = Store.kgImmobilien(stream);
+    if (!props.length) {
+      return head(streamLabel(stream), "Einnahmen / Ausgaben", "") +
+        emptyState("±", "Noch keine Objekte", "Sobald diesem Stream Immobilien zugeordnet sind, erscheint hier die Jahresübersicht der Einnahmen und Ausgaben.", "");
+    }
+    const cf = Store.kgCashflow(stream);
+    const einnahmen = cf.kaltmiete * 12, kredit = cf.kreditrate * 12, instand = cf.instandhaltung * 12, netto = cf.netto * 12;
+
+    const summary = '<div class="panel"><div class="panel-head"><h3 class="panel-title">Jahresübersicht</h3></div>' +
+      '<table class="ptable"><tbody>' +
+      row("Mieteinnahmen (Kaltmiete p.a.)", fmtEur(einnahmen), "pos") +
+      row("Nebenkosten (durchlaufend)", fmtEur(cf.nebenkosten * 12), "muted") +
+      row("Kreditraten p.a.", "− " + fmtEur(kredit), "neg") +
+      row("Instandhaltung p.a.", "− " + fmtEur(instand), "neg") +
+      '<tr class="total"><td>Netto p.a.</td><td class="num">' + fmtEur(netto) + "</td></tr>" +
+      "</tbody></table>" +
+      '<p class="panel-note">Hochgerechnet aus den Monatswerten der Objekte (× 12). Nebenkosten sind durchlaufend und fließen nicht ins Netto.</p></div>';
+
+    const perObjRows = props.map(function (p) {
+      const f = p.fields || {};
+      const ein = nz(f.kaltmiete) * 12, aus = (nz(f.kreditrate) + nz(f.instandhaltung)) * 12;
+      return '<tr data-action="edit-asset" data-id="' + p.id + '" style="cursor:pointer"><td>' + esc(f.name || "–") + "</td>" +
+        '<td class="num pos">' + fmtEur(ein) + "</td>" +
+        '<td class="num neg">' + (aus ? "− " + fmtEur(aus) : fmtEur(0)) + "</td>" +
+        '<td class="num">' + fmtEur(ein - aus) + "</td></tr>";
+    }).join("");
+    const perObj = '<div class="panel"><div class="panel-head"><h3 class="panel-title">Je Objekt (p.a.)</h3></div>' +
+      '<div style="overflow-x:auto"><table class="ptable"><thead><tr><th>Objekt</th><th class="num">Einnahmen</th><th class="num">Ausgaben</th><th class="num">Netto</th></tr></thead>' +
+      "<tbody>" + perObjRows +
+      '<tr class="total"><td>Summe</td><td class="num">' + fmtEur(einnahmen) + '</td><td class="num">− ' + fmtEur(kredit + instand) + '</td><td class="num">' + fmtEur(netto) + "</td></tr>" +
+      "</tbody></table></div></div>";
+
+    return head(streamLabel(stream), "Einnahmen / Ausgaben", "") + '<div class="grid-2">' + summary + perObj + "</div>";
   }
 
   /* ================= CHATBOT ================= */
@@ -825,7 +915,7 @@
       '<button class="btn btn-danger" data-action="clear-all">Alles löschen</button></div></div>' +
 
       '<div class="panel"><div class="panel-head"><h3 class="panel-title">Über</h3></div>' +
-      '<p class="panel-note">Carlos · Personal ERP – Version 4.0. Vermögenscockpit mit Login &amp; Cloud-Sync (Supabase, RLS).<br>' +
+      '<p class="panel-note">Carlos · Personal ERP – Version 4.1. Vermögenscockpit mit Login &amp; Cloud-Sync (Supabase, RLS).<br>' +
       "Geplant: automatische Bankanbindung, Live-Kurse, Dokumenten-Upload &amp; -Suche (RAG) für den Chatbot.</p></div>";
   }
 
@@ -865,17 +955,22 @@
       const hint = bks.length ? "" : '<span class="hint">Buchungskreise legst du unter Zentrale Daten → Buchungskreise an.</span>';
       return '<select id="' + id + '">' + opts + "</select>" + hint;
     }
+    if (field.type === "stream") {
+      const current = (val === undefined || val === null || val === "") ? "stream1" : String(val);
+      const sopts = Store.STREAMS.map(function (s) { return '<option value="' + s.key + '"' + (current === s.key ? " selected" : "") + ">" + esc(s.label) + "</option>"; }).join("");
+      return '<select id="' + id + '">' + sopts + "</select>";
+    }
     const type = field.type === "num" ? "number" : (field.type === "date" ? "date" : "text");
     const step = field.type === "num" ? ' step="any"' : "";
     return '<input id="' + id + '" type="' + type + '"' + step + (field.req ? " required" : "") + ' value="' + esc(val === undefined || val === null ? "" : val) + '">';
   }
 
-  function openAssetForm(bereich, kat, id) {
+  function openAssetForm(bereich, kat, id, defaults) {
     const a = id ? Store.getAsset(id) : null;
     const schema = formSchema(bereich, kat);
     const label = Store.KATEGORIEN[kat].singular;
     const fields = schema.map(function (f) {
-      const val = a ? (a.fields || {})[f.k] : "";
+      const val = a ? (a.fields || {})[f.k] : (defaults && defaults[f.k] !== undefined ? defaults[f.k] : "");
       const full = (f.k === "name" || f.type === "partner" || f.type === "buchungskreis") ? " full" : "";
       return '<div class="form-row' + full + '"><label for="f_' + f.k + '">' + f.label + (f.req ? " *" : "") + "</label>" + fieldInput(f, val) + "</div>";
     }).join("");
@@ -1111,7 +1206,8 @@
       }
       const expanded = ui.expanded[item.section];
       const navChildHtml = function (c) {
-        return '<button class="nav-child' + (ui.section === item.section && ui.kat === c.kat ? " active" : "") + '" data-action="nav" data-section="' + item.section + '" data-kat="' + c.kat + '">' + c.label + "</button>";
+        const active = ui.section === item.section && ui.kat === c.kat && (ui.stream || null) === (c.stream || null);
+        return '<button class="nav-child' + (active ? " active" : "") + '" data-action="nav" data-section="' + item.section + '" data-kat="' + c.kat + '"' + (c.stream ? ' data-stream="' + c.stream + '"' : "") + ">" + c.label + "</button>";
       };
       const children = item.children.map(function (c) {
         if (c.children) {
@@ -1163,8 +1259,9 @@
         if (ui.kat === "bank") return bankHtml("geschaeftlich");
         if (ui.kat === "bilanz") return bilanzHtml();
         if (ui.kat === "cashflow") return cashflowHtml();
-        if (ui.kat === "immobilienbestand") return reImmobilienHtml();
-        if (ui.kat === "einnahmen_ausgaben") return einnahmenAusgabenHtml();
+        if (ui.kat === "immobilienbestand") return reImmobilienHtml(ui.stream || "stream1");
+        if (ui.kat === "einnahmen_ausgaben") return einnahmenAusgabenHtml(ui.stream || "stream1");
+        if (ui.kat === "immobilien") return katListHtml("geschaeftlich", "immobilien", ui.stream || "stream1");
         return katListHtml("geschaeftlich", ui.kat);
       case "chatbot": return chatbotHtml();
       case "news": return newsHtml();
@@ -1210,6 +1307,7 @@
       case "nav":
         ui.section = target.dataset.section;
         ui.kat = target.dataset.kat || null;
+        ui.stream = target.dataset.stream || null;
         ui.partnerId = null;
         if (ui.expanded.hasOwnProperty(ui.section)) ui.expanded[ui.section] = true;
         render(); break;
@@ -1224,7 +1322,7 @@
       case "toggle-sidebar": document.body.classList.toggle("nav-open"); break;
       case "close-sidebar": document.body.classList.remove("nav-open"); break;
       case "filter": ui.filter = target.dataset.filter; render(); break;
-      case "add-asset": openAssetForm(target.dataset.bereich, target.dataset.kat, null); break;
+      case "add-asset": openAssetForm(target.dataset.bereich, target.dataset.kat, null, target.dataset.stream ? { stream: target.dataset.stream } : null); break;
       case "edit-asset": { const a = Store.getAsset(id); if (a) openAssetForm(a.bereich, a.kategorie, id); } break;
       case "delete-asset": if (confirm("Diese Position wirklich löschen?")) { Store.deleteAsset(id); closeModal(); render(); } break;
       case "asset-doc-add": if (el("assetDocInput")) el("assetDocInput").click(); break;

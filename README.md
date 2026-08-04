@@ -1,7 +1,9 @@
 # Carlos · Personal ERP
 
 Dein persönliches Vermögens-ERP: das komplette finanzielle Leben – **privat und
-Business (KG)** – in einer lokalen Web-App im hellen, SAP-inspirierten Design.
+Business (KG)** – in einer Web-App im hellen, SAP-inspirierten Design.
+
+**🌐 Live:** https://carlosschaeuble-collab.github.io/personal-erp/
 
 > 🔒 **Zugriff & Datenschutz:** Login per E-Mail/Passwort (Supabase Auth). Die Daten liegen
 > in Supabase (Postgres) und sind durch **Row Level Security (RLS)** geschützt – nur der

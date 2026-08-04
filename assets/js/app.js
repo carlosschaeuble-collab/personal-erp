@@ -238,8 +238,15 @@
     const t = Store.totals(ui.filter);
     const snaps = Store.getSnapshots();
 
-    const kpis = '<div class="kpis">' +
-      kpi("Nettovermögen", fmtEur(t.netWorth), { accent: true, foot: "abzgl. Immobilienkredite" }) +
+    const investments = (t.byKategorie.wertpapiere || 0) + (t.byKategorie.krypto || 0) + (t.byKategorie.edelmetalle || 0);
+    const liquid = t.byKategorie.bank || 0;
+
+    const kpis = '<div class="kpis kpis-3">' +
+      kpi("Net Worth", fmtEur(t.netWorth), { accent: true, foot: "Vermögen abzgl. Schulden" }) +
+      kpi("Investments", fmtEur(investments), { foot: "Wertpapiere · Krypto · Edelmetalle" }) +
+      kpi("Liquid Assets", fmtEur(liquid), { foot: "Bankkonten" }) +
+      "</div>" +
+      '<div class="kpis kpis-3 kpis-sub">' +
       kpi("Cashflow / Monat", fmtEur(t.cashflow), { foot: "laufend", footClass: t.cashflow >= 0 ? "up" : "down" }) +
       kpi("Positionen", t.count, { foot: "erfasst" }) +
       kpi("Letztes Update", fmtDate(t.lastUpdate), { foot: "zuletzt geändert" }) +
@@ -814,7 +821,7 @@
       '<button class="btn btn-danger" data-action="clear-all">Alles löschen</button></div></div>' +
 
       '<div class="panel"><div class="panel-head"><h3 class="panel-title">Über</h3></div>' +
-      '<p class="panel-note">Carlos · Personal ERP – Version 3.8. Vermögenscockpit mit Login &amp; Cloud-Sync (Supabase, RLS).<br>' +
+      '<p class="panel-note">Carlos · Personal ERP – Version 3.9. Vermögenscockpit mit Login &amp; Cloud-Sync (Supabase, RLS).<br>' +
       "Geplant: automatische Bankanbindung, Live-Kurse, Dokumenten-Upload &amp; -Suche (RAG) für den Chatbot.</p></div>";
   }
 

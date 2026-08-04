@@ -43,8 +43,12 @@
       { kat: "buchungskreise", label: "Buchungskreise" }
     ] },
     { section: "privat", label: "Privat", icon: "privat", children: [
-      { kat: "bank", label: "Bankkonten" }, { kat: "wertpapiere", label: "Wertpapiere" },
-      { kat: "krypto", label: "Kryptowährungen" }, { kat: "edelmetalle", label: "Edelmetalle" },
+      { kat: "bank", label: "Bankkonten" },
+      { group: "investments", label: "Investments", children: [
+        { kat: "wertpapiere", label: "Wertpapiere" },
+        { kat: "krypto", label: "Kryptowährungen" },
+        { kat: "edelmetalle", label: "Edelmetalle" }
+      ] },
       { kat: "uhren", label: "Wertgegenstände" }, { kat: "immobilien", label: "Immobilien" },
       { kat: "forderungen", label: "Forderungen / Verbindl." }, { kat: "sonstiges", label: "Sonstiges" }
     ] },
@@ -62,7 +66,7 @@
     { section: "termine", label: "Termine", icon: "termine" }
   ];
 
-  const ui = { section: "uebersicht", kat: null, partnerId: null, filter: "alles", expanded: { zentrale: true, privat: true, geschaeftlich: true, stream1: true }, chat: [] };
+  const ui = { section: "uebersicht", kat: null, partnerId: null, filter: "alles", expanded: { zentrale: true, privat: true, geschaeftlich: true, investments: true, stream1: true }, chat: [] };
   let assetDocs = []; // Arbeitskopie der Dokumente im geöffneten Asset-Formular
 
   // Welche Assets erlauben Datei-Anhänge (z. B. Mietvertrag)? → vermietete KG-Immobilien
@@ -821,7 +825,7 @@
       '<button class="btn btn-danger" data-action="clear-all">Alles löschen</button></div></div>' +
 
       '<div class="panel"><div class="panel-head"><h3 class="panel-title">Über</h3></div>' +
-      '<p class="panel-note">Carlos · Personal ERP – Version 3.9. Vermögenscockpit mit Login &amp; Cloud-Sync (Supabase, RLS).<br>' +
+      '<p class="panel-note">Carlos · Personal ERP – Version 4.0. Vermögenscockpit mit Login &amp; Cloud-Sync (Supabase, RLS).<br>' +
       "Geplant: automatische Bankanbindung, Live-Kurse, Dokumenten-Upload &amp; -Suche (RAG) für den Chatbot.</p></div>";
   }
 

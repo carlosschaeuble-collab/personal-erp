@@ -1028,7 +1028,7 @@
       '<button class="btn btn-danger" data-action="clear-all">Alles löschen</button></div></div>' +
 
       '<div class="panel"><div class="panel-head"><h3 class="panel-title">Über</h3></div>' +
-      '<p class="panel-note">Carlos · Personal ERP – Version 4.3. Vermögenscockpit mit Login &amp; Cloud-Sync (Supabase, RLS).<br>' +
+      '<p class="panel-note">Carlos · Personal ERP – Version 4.4. Vermögenscockpit mit Login &amp; Cloud-Sync (Supabase, RLS).<br>' +
       "Geplant: automatische Bankanbindung, Live-Kurse, Dokumenten-Upload &amp; -Suche (RAG) für den Chatbot.</p></div>";
   }
 
@@ -1341,8 +1341,9 @@
     openModal(
       '<div class="modal-head"><h3>Zahlen importieren</h3><button class="icon-btn" data-action="close-modal">✕</button></div>' +
       '<form id="pnlImportForm"><div class="modal-body">' +
-      '<p class="hint" style="margin-bottom:10px">Füge den JSON-Datenblock ein, den du erhalten hast. Er wird nur lokal gespeichert und in deine Cloud synchronisiert – nichts landet im öffentlichen Code. Ein Jahr mit gleichem Stream wird dabei ersetzt.</p>' +
-      '<textarea id="f_pnljson" rows="9" placeholder="JSON hier einfügen …" style="width:100%;box-sizing:border-box;font-family:ui-monospace,monospace;font-size:12px"></textarea>' +
+      '<p class="hint" style="margin-bottom:10px">Wähle die JSON-Datei aus <b>oder</b> füge den JSON-Text unten ein. Wird nur lokal gespeichert und in deine Cloud synchronisiert – nichts landet im öffentlichen Code. Ein Jahr mit gleichem Stream wird dabei ersetzt.</p>' +
+      '<div style="margin-bottom:10px"><input type="file" id="f_pnlfile" accept="application/json,.json" class="hidden"><button type="button" class="btn" data-action="pnl-file">⬆︎ Datei wählen (.json)</button></div>' +
+      '<textarea id="f_pnljson" rows="8" placeholder="… oder JSON hier einfügen" style="width:100%;box-sizing:border-box;font-family:ui-monospace,monospace;font-size:12px"></textarea>' +
       '<p class="auth-error" id="pnlImportErr" style="display:none;margin-top:8px"></p>' +
       '</div><div class="modal-foot"><span class="spacer"></span>' +
       '<button type="button" class="btn btn-ghost" data-action="close-modal">Abbrechen</button>' +
@@ -1556,6 +1557,7 @@
       case "delete-sachkonto": if (confirm("Dieses Sachkonto löschen?")) { Store.deleteSachkonto(ui.kontenplanId, id); closeModal(); render(); } break;
       case "import-pnl": openPnlImport(target.dataset.stream || ui.stream || "stream2"); break;
       case "pnl-year": ui.pnlJahr = Number(target.dataset.jahr); render(); break;
+      case "pnl-file": if (el("f_pnlfile")) el("f_pnlfile").click(); break;
       case "save-snapshot": Store.addSnapshot(); render(); break;
       case "delete-snapshot": if (confirm("Snapshot löschen?")) { Store.deleteSnapshot(id); render(); } break;
       case "chat-suggest": sendChat(target.dataset.q); break;
@@ -1588,6 +1590,7 @@
     if (e.target.id === "importFile" && e.target.files && e.target.files[0]) { importFile(e.target.files[0]); e.target.value = ""; }
     if (e.target.id === "partnerDocInput" && e.target.files && e.target.files.length) { handlePartnerDocs(e.target.files); e.target.value = ""; }
     if (e.target.id === "assetDocInput" && e.target.files && e.target.files.length) { handleAssetDocs(e.target.files); e.target.value = ""; }
+    if (e.target.id === "f_pnlfile" && e.target.files && e.target.files[0]) { const r = new FileReader(); r.onload = function () { if (el("f_pnljson")) el("f_pnljson").value = String(r.result); }; r.readAsText(e.target.files[0]); e.target.value = ""; }
   }
   function onKey(e) {
     if (e.key === "Escape" && !el("modalOverlay").classList.contains("hidden")) closeModal();

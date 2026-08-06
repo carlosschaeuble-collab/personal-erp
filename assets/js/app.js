@@ -72,7 +72,7 @@
     { section: "termine", label: "Termine", icon: "termine" }
   ];
 
-  const ui = { section: "uebersicht", kat: null, stream: null, partnerId: null, kontenplanId: null, filter: "alles", expanded: { zentrale: true, privat: true, geschaeftlich: true, investments: true, stream1: true, stream2: true }, chat: [] };
+  const ui = { section: "uebersicht", kat: null, stream: null, partnerId: null, kontenplanId: null, pnlJahr: null, filter: "alles", expanded: { zentrale: true, privat: true, geschaeftlich: true, investments: true, stream1: true, stream2: true }, chat: [] };
   let assetDocs = []; // Arbeitskopie der Dokumente im geöffneten Asset-Formular
 
   // Welche Assets erlauben Datei-Anhänge (z. B. Mietvertrag)? → vermietete KG-Immobilien
@@ -817,11 +817,66 @@
   }
 
   // Einnahmen / Ausgaben eines Streams als Jahresübersicht
+  const PNL_MONATE = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
+  function pnlCompute(m) {
+    m = m || {};
+    const umsatz = nz(m.umsatz), totalFee = nz(m.fee) + nz(m.iva);
+    const kosten = nz(m.reparaturen) + nz(m.nebenkosten) + nz(m.adjustments) + nz(m.sonstige);
+    const ebit = umsatz - totalFee - kosten, est = nz(m.est);
+    return { tage: nz(m.tage), umsatz: umsatz, totalFee: totalFee, reparaturen: nz(m.reparaturen), nebenkosten: nz(m.nebenkosten), sonstige: nz(m.adjustments) + nz(m.sonstige), ebit: ebit, est: est, gewinn: ebit - est };
+  }
+  function pnlHtml(stream, entries, importBtn) {
+    const jahre = entries.map(function (e) { return e.jahr; });
+    let jahr = ui.pnlJahr;
+    if (jahre.indexOf(jahr) < 0) jahr = jahre[jahre.length - 1];
+    const entry = entries.filter(function (e) { return e.jahr === jahr; })[0] || { jahr: jahr, monate: [] };
+    const months = [];
+    for (let i = 0; i < 12; i++) months.push(pnlCompute((entry.monate || [])[i]));
+    const T = months.reduce(function (a, m) {
+      a.tage += m.tage; a.umsatz += m.umsatz; a.totalFee += m.totalFee; a.reparaturen += m.reparaturen;
+      a.nebenkosten += m.nebenkosten; a.sonstige += m.sonstige; a.ebit += m.ebit; a.est += m.est; a.gewinn += m.gewinn; return a;
+    }, { tage: 0, umsatz: 0, totalFee: 0, reparaturen: 0, nebenkosten: 0, sonstige: 0, ebit: 0, est: 0, gewinn: 0 });
+    const rendite = T.umsatz ? T.gewinn / T.umsatz : 0;
+
+    const yearBtns = '<div class="segmented">' + jahre.map(function (j) {
+      return '<button data-action="pnl-year" data-jahr="' + j + '"' + (j === jahr ? ' class="active"' : "") + ">" + j + "</button>";
+    }).join("") + "</div>";
+    const kpis = '<div class="kpis">' +
+      kpi("Umsatz " + jahr, fmtEur(T.umsatz), { accent: true, foot: T.tage + " Nächte vermietet" }) +
+      kpi("Gewinn n. St.", fmtEur(T.gewinn), { foot: "nach ESt.", footClass: T.gewinn >= 0 ? "up" : "down" }) +
+      kpi("EBIT", fmtEur(T.ebit), { foot: "vor Steuern" }) +
+      kpi("Umsatzrendite", fmtNum(rendite * 100, 0) + " %", { foot: "Gewinn / Umsatz" }) +
+      "</div>";
+
+    function cells(fn, cls) { let h = ""; for (let i = 0; i < 12; i++) h += '<td class="num ' + (cls || "") + '">' + fn(months[i]) + "</td>"; return h; }
+    function e0(v) { return v ? fmtEur(v) : "–"; }
+    function nEg(v) { return v ? "− " + fmtEur(v) : "–"; }
+    const thead = '<tr><th>Position</th>' + PNL_MONATE.map(function (m) { return '<th class="num">' + m + "</th>"; }).join("") + '<th class="num">Summe</th></tr>';
+    const body =
+      '<tr><td>Nächte</td>' + cells(function (m) { return m.tage || "–"; }) + '<td class="num">' + T.tage + "</td></tr>" +
+      '<tr><td>Umsatz</td>' + cells(function (m) { return e0(m.umsatz); }, "pos") + '<td class="num pos">' + fmtEur(T.umsatz) + "</td></tr>" +
+      '<tr><td>Gebühren (18,15 %)</td>' + cells(function (m) { return nEg(m.totalFee); }, "neg") + '<td class="num neg">' + nEg(T.totalFee) + "</td></tr>" +
+      '<tr><td>Reparaturen</td>' + cells(function (m) { return nEg(m.reparaturen); }, "neg") + '<td class="num neg">' + nEg(T.reparaturen) + "</td></tr>" +
+      '<tr><td>Nebenkosten</td>' + cells(function (m) { return nEg(m.nebenkosten); }, "neg") + '<td class="num neg">' + nEg(T.nebenkosten) + "</td></tr>" +
+      '<tr><td>Sonstige</td>' + cells(function (m) { return m.sonstige ? fmtEur(m.sonstige) : "–"; }) + '<td class="num">' + fmtEur(T.sonstige) + "</td></tr>" +
+      '<tr class="total"><td>EBIT</td>' + cells(function (m) { return fmtEur(m.ebit); }) + '<td class="num">' + fmtEur(T.ebit) + "</td></tr>" +
+      '<tr><td>ESt. (35 %)</td>' + cells(function (m) { return nEg(m.est); }, "neg") + '<td class="num neg">' + nEg(T.est) + "</td></tr>" +
+      '<tr class="total"><td>Gewinn n. St.</td>' + cells(function (m) { return fmtEur(m.gewinn); }) + '<td class="num">' + fmtEur(T.gewinn) + "</td></tr>";
+    const table = '<div class="panel"><div class="panel-head"><h3 class="panel-title">Monatsübersicht ' + jahr + "</h3>" + yearBtns + "</div>" +
+      '<div style="overflow-x:auto"><table class="ptable pnl-table"><thead>' + thead + "</thead><tbody>" + body + "</tbody></table></div>" +
+      '<p class="panel-note">Importiert aus deiner Marbella-Kalkulation. Gebühren = Fee (15 %) + IVA (21 %). EBIT = Umsatz − Gebühren − Kosten.</p></div>';
+    return head(streamLabel(stream), "Einnahmen / Ausgaben", importBtn) + kpis + table;
+  }
   function einnahmenAusgabenHtml(stream) {
+    const importBtn = '<button class="btn btn-sm" data-action="import-pnl" data-stream="' + stream + '">⬆︎ Zahlen importieren</button>';
+    const pnl = Store.getStreamPnl(stream);
+    if (pnl.length) return pnlHtml(stream, pnl, importBtn);
+
     const props = Store.kgImmobilien(stream);
     if (!props.length) {
-      return head(streamLabel(stream), "Einnahmen / Ausgaben", "") +
-        emptyState("±", "Noch keine Objekte", "Sobald diesem Stream Immobilien zugeordnet sind, erscheint hier die Jahresübersicht der Einnahmen und Ausgaben.", "");
+      return head(streamLabel(stream), "Einnahmen / Ausgaben", importBtn) +
+        emptyState("±", "Noch keine Zahlen", "Importiere die monatliche GuV (per JSON) oder ordne diesem Stream Immobilien zu – dann erscheint hier die Jahresübersicht.",
+          '<button class="btn btn-primary" data-action="import-pnl" data-stream="' + stream + '">⬆︎ Zahlen importieren</button>');
     }
     const cf = Store.kgCashflow(stream);
     const einnahmen = cf.kaltmiete * 12, kredit = cf.kreditrate * 12, instand = cf.instandhaltung * 12, netto = cf.netto * 12;
@@ -973,7 +1028,7 @@
       '<button class="btn btn-danger" data-action="clear-all">Alles löschen</button></div></div>' +
 
       '<div class="panel"><div class="panel-head"><h3 class="panel-title">Über</h3></div>' +
-      '<p class="panel-note">Carlos · Personal ERP – Version 4.2. Vermögenscockpit mit Login &amp; Cloud-Sync (Supabase, RLS).<br>' +
+      '<p class="panel-note">Carlos · Personal ERP – Version 4.3. Vermögenscockpit mit Login &amp; Cloud-Sync (Supabase, RLS).<br>' +
       "Geplant: automatische Bankanbindung, Live-Kurse, Dokumenten-Upload &amp; -Suche (RAG) für den Chatbot.</p></div>";
   }
 
@@ -1282,6 +1337,33 @@
     closeModal(); render();
   }
 
+  function openPnlImport(stream) {
+    openModal(
+      '<div class="modal-head"><h3>Zahlen importieren</h3><button class="icon-btn" data-action="close-modal">✕</button></div>' +
+      '<form id="pnlImportForm"><div class="modal-body">' +
+      '<p class="hint" style="margin-bottom:10px">Füge den JSON-Datenblock ein, den du erhalten hast. Er wird nur lokal gespeichert und in deine Cloud synchronisiert – nichts landet im öffentlichen Code. Ein Jahr mit gleichem Stream wird dabei ersetzt.</p>' +
+      '<textarea id="f_pnljson" rows="9" placeholder="JSON hier einfügen …" style="width:100%;box-sizing:border-box;font-family:ui-monospace,monospace;font-size:12px"></textarea>' +
+      '<p class="auth-error" id="pnlImportErr" style="display:none;margin-top:8px"></p>' +
+      '</div><div class="modal-foot"><span class="spacer"></span>' +
+      '<button type="button" class="btn btn-ghost" data-action="close-modal">Abbrechen</button>' +
+      '<button type="submit" class="btn btn-primary">Importieren</button></div></form>'
+    );
+    el("modal").dataset.form = "pnlimport"; el("modal").dataset.stream = stream || "";
+    el("f_pnljson").focus();
+  }
+  function submitPnlImport() {
+    const ta = el("f_pnljson"), errEl = el("pnlImportErr");
+    let arr;
+    try { arr = JSON.parse(ta.value); }
+    catch (e) { errEl.textContent = "Ungültiges JSON: " + e.message; errEl.style.display = "block"; return; }
+    if (!Array.isArray(arr)) { errEl.textContent = "Erwartet wird eine Liste [ … ]."; errEl.style.display = "block"; return; }
+    const n = Store.importStreamPnl(arr);
+    if (!n) { errEl.textContent = "Keine gültigen Einträge (brauche stream, jahr, monate)."; errEl.style.display = "block"; return; }
+    const first = arr.filter(function (e) { return e && e.jahr; })[0];
+    if (first) ui.pnlJahr = Number(first.jahr);
+    closeModal(); render();
+  }
+
   /* ================= Datei-Download / Import ================= */
   function download(name, content, mime) {
     const blob = new Blob([content], { type: mime || "text/plain;charset=utf-8" });
@@ -1472,6 +1554,8 @@
       case "add-sachkonto": openSachkontoForm(null); break;
       case "edit-sachkonto": openSachkontoForm(id); break;
       case "delete-sachkonto": if (confirm("Dieses Sachkonto löschen?")) { Store.deleteSachkonto(ui.kontenplanId, id); closeModal(); render(); } break;
+      case "import-pnl": openPnlImport(target.dataset.stream || ui.stream || "stream2"); break;
+      case "pnl-year": ui.pnlJahr = Number(target.dataset.jahr); render(); break;
       case "save-snapshot": Store.addSnapshot(); render(); break;
       case "delete-snapshot": if (confirm("Snapshot löschen?")) { Store.deleteSnapshot(id); render(); } break;
       case "chat-suggest": sendChat(target.dataset.q); break;
@@ -1491,6 +1575,7 @@
     else if (e.target.id === "bkForm") { e.preventDefault(); submitBuchungskreisForm(); }
     else if (e.target.id === "kpForm") { e.preventDefault(); submitKontenplanForm(); }
     else if (e.target.id === "sachkontoForm") { e.preventDefault(); submitSachkontoForm(); }
+    else if (e.target.id === "pnlImportForm") { e.preventDefault(); submitPnlImport(); }
     else if (e.target.id === "noteForm") { e.preventDefault(); const t = el("f_note").value.trim(); if (t) { Store.addPartnerNote(ui.partnerId, t); render(); } }
     else if (e.target.id === "chatForm") { e.preventDefault(); const i = el("chatInput"); sendChat(i.value); }
   }

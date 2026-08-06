@@ -139,6 +139,7 @@ const Store = (function () {
     partners: [],
     buchungskreise: [],
     kontenplaene: [],
+    streamPnl: [],
     termine: [],
     snapshots: [],
     settings: {}
@@ -161,6 +162,7 @@ const Store = (function () {
           partners: Array.isArray(p.partners) ? p.partners : [],
           buchungskreise: Array.isArray(p.buchungskreise) ? p.buchungskreise : [],
           kontenplaene: Array.isArray(p.kontenplaene) ? p.kontenplaene : [],
+          streamPnl: Array.isArray(p.streamPnl) ? p.streamPnl : [],
           termine: Array.isArray(p.termine) ? p.termine : [],
           snapshots: Array.isArray(p.snapshots) ? p.snapshots : [],
           settings: p.settings || {}
@@ -197,6 +199,7 @@ const Store = (function () {
       partners: Array.isArray(obj.partners) ? obj.partners : [],
       buchungskreise: Array.isArray(obj.buchungskreise) ? obj.buchungskreise : [],
       kontenplaene: Array.isArray(obj.kontenplaene) ? obj.kontenplaene : [],
+      streamPnl: Array.isArray(obj.streamPnl) ? obj.streamPnl : [],
       termine: Array.isArray(obj.termine) ? obj.termine : [],
       snapshots: Array.isArray(obj.snapshots) ? obj.snapshots : [],
       settings: obj.settings || {}
@@ -508,6 +511,35 @@ const Store = (function () {
     save();
   }
 
+  /* ---- Stream-GuV (monatliche Einnahmen/Ausgaben je Stream & Jahr) ---- */
+  function getStreamPnl(stream) {
+    return (state.streamPnl || []).filter(function (e) { return e.stream === stream; }).sort(function (a, b) { return a.jahr - b.jahr; });
+  }
+  // Merge: ersetzt vorhandene Einträge mit gleichem stream+jahr. Erwartet [{stream,jahr,monate:[12×{...}]}]
+  function importStreamPnl(arr) {
+    if (!Array.isArray(arr)) return 0;
+    if (!Array.isArray(state.streamPnl)) state.streamPnl = [];
+    let n = 0;
+    arr.forEach(function (e) {
+      if (!e || !e.stream || !e.jahr || !Array.isArray(e.monate)) return;
+      const jahr = Number(e.jahr);
+      state.streamPnl = state.streamPnl.filter(function (x) { return !(x.stream === e.stream && x.jahr === jahr); });
+      const monate = [];
+      for (let i = 0; i < 12; i++) {
+        const m = e.monate[i] || {};
+        monate.push({ tage: num(m.tage), umsatz: num(m.umsatz), fee: num(m.fee), iva: num(m.iva), reparaturen: num(m.reparaturen), nebenkosten: num(m.nebenkosten), adjustments: num(m.adjustments), sonstige: num(m.sonstige), est: num(m.est) });
+      }
+      state.streamPnl.push({ id: uid(), stream: String(e.stream), jahr: jahr, monate: monate });
+      n++;
+    });
+    save();
+    return n;
+  }
+  function deleteStreamPnl(stream, jahr) {
+    state.streamPnl = (state.streamPnl || []).filter(function (e) { return !(e.stream === stream && e.jahr === Number(jahr)); });
+    save();
+  }
+
   /* ---------------------------------------------------------
      News (kuratierter Beispiel-Feed – live-Feed folgt später)
      --------------------------------------------------------- */
@@ -553,6 +585,7 @@ const Store = (function () {
       partners: Array.isArray(p.partners) ? p.partners : [],
       buchungskreise: Array.isArray(p.buchungskreise) ? p.buchungskreise : [],
       kontenplaene: Array.isArray(p.kontenplaene) ? p.kontenplaene : [],
+      streamPnl: Array.isArray(p.streamPnl) ? p.streamPnl : [],
       termine: Array.isArray(p.termine) ? p.termine : [],
       snapshots: Array.isArray(p.snapshots) ? p.snapshots : [],
       settings: p.settings || {}
@@ -583,7 +616,7 @@ const Store = (function () {
   }
 
   function clearAll() {
-    state.assets = []; state.partners = []; state.buchungskreise = []; state.kontenplaene = []; state.termine = []; state.snapshots = [];
+    state.assets = []; state.partners = []; state.buchungskreise = []; state.kontenplaene = []; state.streamPnl = []; state.termine = []; state.snapshots = [];
     save();
   }
 
@@ -688,6 +721,7 @@ const Store = (function () {
     getBuchungskreise: getBuchungskreise, getBuchungskreis: getBuchungskreis, addBuchungskreis: addBuchungskreis, updateBuchungskreis: updateBuchungskreis, deleteBuchungskreis: deleteBuchungskreis,
     getKontenplaene: getKontenplaene, getKontenplan: getKontenplan, addKontenplan: addKontenplan, updateKontenplan: updateKontenplan, deleteKontenplan: deleteKontenplan,
     addSachkonto: addSachkonto, updateSachkonto: updateSachkonto, deleteSachkonto: deleteSachkonto, KONTOARTEN: KONTOARTEN,
+    getStreamPnl: getStreamPnl, importStreamPnl: importStreamPnl, deleteStreamPnl: deleteStreamPnl,
     getNews: getNews,
     getSnapshots: getSnapshots, addSnapshot: addSnapshot, deleteSnapshot: deleteSnapshot,
     // Export & Cloud-Sync

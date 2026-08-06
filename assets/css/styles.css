@@ -189,6 +189,9 @@ h1, h2, h3 { font-family: var(--sans); }
 .check-list { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; max-height: 240px; overflow-y: auto; }
 .check-item { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
 .check-item input { width: 16px; height: 16px; flex: none; }
+.pnl-table { font-size: 13px; }
+.pnl-table th, .pnl-table td { white-space: nowrap; padding: 7px 10px; }
+.pnl-table th:first-child, .pnl-table td:first-child { position: sticky; left: 0; background: var(--panel); text-align: left; font-weight: 500; }
 
 /* ---------------- Panels ---------------- */
 .panel {

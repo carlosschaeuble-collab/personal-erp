@@ -818,24 +818,40 @@
 
   // Einnahmen / Ausgaben eines Streams als Jahresübersicht
   const PNL_MONATE = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
-  function pnlCompute(m) {
+  const PNL_ESTSATZ = 0.35;
+  function round2(v) { return Math.round((Number(v) || 0) * 100) / 100; }
+  // Harte (händisch erfasste) Felder; Altdaten ohne eurNacht: aus Umsatz/Tage ableiten
+  function pnlHard(m) {
     m = m || {};
-    const umsatz = nz(m.umsatz), totalFee = nz(m.fee) + nz(m.iva);
-    const kosten = nz(m.reparaturen) + nz(m.nebenkosten) + nz(m.adjustments) + nz(m.sonstige);
-    const ebit = umsatz - totalFee - kosten, est = nz(m.est);
-    return { tage: nz(m.tage), umsatz: umsatz, totalFee: totalFee, reparaturen: nz(m.reparaturen), nebenkosten: nz(m.nebenkosten), sonstige: nz(m.adjustments) + nz(m.sonstige), ebit: ebit, est: est, gewinn: ebit - est };
+    const tage = nz(m.tage);
+    const eurNacht = (m.eurNacht !== undefined && m.eurNacht !== null && m.eurNacht !== "")
+      ? nz(m.eurNacht) : (tage > 0 ? nz(m.umsatz) / tage : 0);
+    return { tage: tage, eurNacht: eurNacht, fee: nz(m.fee), iva: nz(m.iva),
+      reparaturen: nz(m.reparaturen), nebenkosten: nz(m.nebenkosten), adjustments: nz(m.adjustments), sonstige: nz(m.sonstige) };
   }
-  function pnlHtml(stream, entries, importBtn) {
+  // Formelfelder aus den harten Feldern
+  function pnlCompute(m) {
+    const h = pnlHard(m);
+    const umsatz = h.tage * h.eurNacht;
+    const totalFee = h.fee + h.iva;
+    const total = h.reparaturen + h.nebenkosten + h.adjustments + h.sonstige;
+    const ebit = umsatz - totalFee - total;
+    const est = ebit * PNL_ESTSATZ;
+    return { tage: h.tage, eurNacht: h.eurNacht, fee: h.fee, iva: h.iva, reparaturen: h.reparaturen,
+      nebenkosten: h.nebenkosten, adjustments: h.adjustments, sonstige: h.sonstige,
+      umsatz: umsatz, totalFee: totalFee, total: total, ebit: ebit, est: est, gewinn: ebit - est };
+  }
+  function pnlHtml(stream, entries, actionsBtns) {
     const jahre = entries.map(function (e) { return e.jahr; });
     let jahr = ui.pnlJahr;
     if (jahre.indexOf(jahr) < 0) jahr = jahre[jahre.length - 1];
     const entry = entries.filter(function (e) { return e.jahr === jahr; })[0] || { jahr: jahr, monate: [] };
     const months = [];
     for (let i = 0; i < 12; i++) months.push(pnlCompute((entry.monate || [])[i]));
-    const T = months.reduce(function (a, m) {
-      a.tage += m.tage; a.umsatz += m.umsatz; a.totalFee += m.totalFee; a.reparaturen += m.reparaturen;
-      a.nebenkosten += m.nebenkosten; a.sonstige += m.sonstige; a.ebit += m.ebit; a.est += m.est; a.gewinn += m.gewinn; return a;
-    }, { tage: 0, umsatz: 0, totalFee: 0, reparaturen: 0, nebenkosten: 0, sonstige: 0, ebit: 0, est: 0, gewinn: 0 });
+    const FLDS = ["tage", "eurNacht", "fee", "iva", "reparaturen", "nebenkosten", "adjustments", "sonstige", "umsatz", "totalFee", "total", "ebit", "est", "gewinn"];
+    const T = {}; FLDS.forEach(function (k) { T[k] = 0; });
+    months.forEach(function (m) { FLDS.forEach(function (k) { T[k] += m[k]; }); });
+    const avgNacht = T.tage ? T.umsatz / T.tage : 0;
     const rendite = T.umsatz ? T.gewinn / T.umsatz : 0;
 
     const yearBtns = '<div class="segmented">' + jahre.map(function (j) {
@@ -843,40 +859,57 @@
     }).join("") + "</div>";
     const kpis = '<div class="kpis">' +
       kpi("Umsatz " + jahr, fmtEur(T.umsatz), { accent: true, foot: T.tage + " Nächte vermietet" }) +
-      kpi("Gewinn n. St.", fmtEur(T.gewinn), { foot: "nach ESt.", footClass: T.gewinn >= 0 ? "up" : "down" }) +
+      kpi("Gewinn n. St.", fmtEur(T.gewinn), { foot: "nach ESt. (35 %)", footClass: T.gewinn >= 0 ? "up" : "down" }) +
       kpi("EBIT", fmtEur(T.ebit), { foot: "vor Steuern" }) +
       kpi("Umsatzrendite", fmtNum(rendite * 100, 0) + " %", { foot: "Gewinn / Umsatz" }) +
       "</div>";
 
     function cells(fn, cls) { let h = ""; for (let i = 0; i < 12; i++) h += '<td class="num ' + (cls || "") + '">' + fn(months[i]) + "</td>"; return h; }
-    function e0(v) { return v ? fmtEur(v) : "–"; }
-    function nEg(v) { return v ? "− " + fmtEur(v) : "–"; }
-    const thead = '<tr><th>Position</th>' + PNL_MONATE.map(function (m) { return '<th class="num">' + m + "</th>"; }).join("") + '<th class="num">Summe</th></tr>';
+    const dash = '<span class="pnl-zero">–</span>';
+    function pos0(v) { return v ? fmtEur(v) : dash; }
+    function neg0(v) { return v ? "− " + fmtEur(v) : dash; }
+    function inRow(label, get, cls, sumTxt) {
+      return '<tr class="pnl-in"><td>' + label + "</td>" + cells(get, cls) + '<td class="num ' + (cls || "") + '">' + sumTxt + "</td></tr>";
+    }
+    function calcRow(label, get, cls, sumTxt, strong) {
+      return '<tr class="pnl-calc' + (strong ? " pnl-strong" : "") + '"><td>' + label + "</td>" + cells(get, cls) + '<td class="num ' + (cls || "") + '">' + sumTxt + "</td></tr>";
+    }
+    const monHead = PNL_MONATE.map(function (mn, i) {
+      return '<th class="num"><button class="pnl-mbtn" data-action="edit-pnl-month" data-stream="' + stream + '" data-jahr="' + jahr + '" data-monat="' + i + '" title="Monat bearbeiten">' + mn + "</button></th>";
+    }).join("");
+    const thead = '<tr><th>Position</th>' + monHead + '<th class="num">Summe</th></tr>';
     const body =
-      '<tr><td>Nächte</td>' + cells(function (m) { return m.tage || "–"; }) + '<td class="num">' + T.tage + "</td></tr>" +
-      '<tr><td>Umsatz</td>' + cells(function (m) { return e0(m.umsatz); }, "pos") + '<td class="num pos">' + fmtEur(T.umsatz) + "</td></tr>" +
-      '<tr><td>Gebühren (18,15 %)</td>' + cells(function (m) { return nEg(m.totalFee); }, "neg") + '<td class="num neg">' + nEg(T.totalFee) + "</td></tr>" +
-      '<tr><td>Reparaturen</td>' + cells(function (m) { return nEg(m.reparaturen); }, "neg") + '<td class="num neg">' + nEg(T.reparaturen) + "</td></tr>" +
-      '<tr><td>Nebenkosten</td>' + cells(function (m) { return nEg(m.nebenkosten); }, "neg") + '<td class="num neg">' + nEg(T.nebenkosten) + "</td></tr>" +
-      '<tr><td>Sonstige</td>' + cells(function (m) { return m.sonstige ? fmtEur(m.sonstige) : "–"; }) + '<td class="num">' + fmtEur(T.sonstige) + "</td></tr>" +
-      '<tr class="total"><td>EBIT</td>' + cells(function (m) { return fmtEur(m.ebit); }) + '<td class="num">' + fmtEur(T.ebit) + "</td></tr>" +
-      '<tr><td>ESt. (35 %)</td>' + cells(function (m) { return nEg(m.est); }, "neg") + '<td class="num neg">' + nEg(T.est) + "</td></tr>" +
-      '<tr class="total"><td>Gewinn n. St.</td>' + cells(function (m) { return fmtEur(m.gewinn); }) + '<td class="num">' + fmtEur(T.gewinn) + "</td></tr>";
+      inRow("Nächte", function (m) { return m.tage || dash; }, "", String(T.tage)) +
+      inRow("€ / Nacht", function (m) { return m.eurNacht ? fmtEur(m.eurNacht) : dash; }, "", fmtEur(avgNacht)) +
+      calcRow("Umsatz", function (m) { return pos0(m.umsatz); }, "pos", fmtEur(T.umsatz)) +
+      inRow("Fee (15 %)", function (m) { return neg0(m.fee); }, "neg", neg0(T.fee)) +
+      inRow("IVA (21 %)", function (m) { return neg0(m.iva); }, "neg", neg0(T.iva)) +
+      calcRow("Total Fee", function (m) { return neg0(m.totalFee); }, "neg", neg0(T.totalFee)) +
+      inRow("Reparaturen", function (m) { return neg0(m.reparaturen); }, "neg", neg0(T.reparaturen)) +
+      inRow("Nebenkosten", function (m) { return neg0(m.nebenkosten); }, "neg", neg0(T.nebenkosten)) +
+      inRow("Adjustments", function (m) { return m.adjustments ? fmtEur(m.adjustments) : dash; }, "", fmtEur(T.adjustments)) +
+      inRow("Sonstige", function (m) { return m.sonstige ? fmtEur(m.sonstige) : dash; }, "", fmtEur(T.sonstige)) +
+      calcRow("Total Kosten", function (m) { return neg0(m.total); }, "neg", neg0(T.total)) +
+      calcRow("EBIT", function (m) { return fmtEur(m.ebit); }, "", fmtEur(T.ebit), true) +
+      calcRow("ESt. (35 %)", function (m) { return neg0(m.est); }, "neg", neg0(T.est)) +
+      calcRow("Gewinn n. St.", function (m) { return fmtEur(m.gewinn); }, "", fmtEur(T.gewinn), true);
     const table = '<div class="panel"><div class="panel-head"><h3 class="panel-title">Monatsübersicht ' + jahr + "</h3>" + yearBtns + "</div>" +
       '<div style="overflow-x:auto"><table class="ptable pnl-table"><thead>' + thead + "</thead><tbody>" + body + "</tbody></table></div>" +
-      '<p class="panel-note">Importiert aus deiner Marbella-Kalkulation. Gebühren = Fee (15 %) + IVA (21 %). EBIT = Umsatz − Gebühren − Kosten.</p></div>';
-    return head(streamLabel(stream), "Einnahmen / Ausgaben", importBtn) + kpis + table;
+      '<p class="panel-note"><b>Monat anklicken</b> (Spaltenkopf), um die Eingabewerte zu bearbeiten. Grau hinterlegte Zeilen sind <b>Formelfelder</b>: Umsatz = Nächte × €/Nacht · Total Fee = Fee + IVA · Total Kosten = Reparaturen + Nebenkosten + Adjustments + Sonstige · EBIT = Umsatz − Total Fee − Total Kosten · ESt. = 35 % × EBIT · Gewinn = EBIT − ESt.</p></div>';
+    return head(streamLabel(stream), "Einnahmen / Ausgaben", actionsBtns) + kpis + table;
   }
   function einnahmenAusgabenHtml(stream) {
-    const importBtn = '<button class="btn btn-sm" data-action="import-pnl" data-stream="' + stream + '">⬆︎ Zahlen importieren</button>';
+    const actions = '<div class="btn-row">' +
+      '<button class="btn btn-sm btn-primary" data-action="add-pnl-year" data-stream="' + stream + '">＋ Jahr</button>' +
+      '<button class="btn btn-sm" data-action="import-pnl" data-stream="' + stream + '">⬆︎ Import</button></div>';
     const pnl = Store.getStreamPnl(stream);
-    if (pnl.length) return pnlHtml(stream, pnl, importBtn);
+    if (pnl.length) return pnlHtml(stream, pnl, actions);
 
     const props = Store.kgImmobilien(stream);
     if (!props.length) {
-      return head(streamLabel(stream), "Einnahmen / Ausgaben", importBtn) +
-        emptyState("±", "Noch keine Zahlen", "Importiere die monatliche GuV (per JSON) oder ordne diesem Stream Immobilien zu – dann erscheint hier die Jahresübersicht.",
-          '<button class="btn btn-primary" data-action="import-pnl" data-stream="' + stream + '">⬆︎ Zahlen importieren</button>');
+      return head(streamLabel(stream), "Einnahmen / Ausgaben", actions) +
+        emptyState("±", "Noch keine Zahlen", "Lege ein Jahr an und trage die Monatswerte händisch ein – oder importiere sie (JSON/Datei-Upload).",
+          '<button class="btn btn-primary" data-action="add-pnl-year" data-stream="' + stream + '">＋ Jahr anlegen</button>');
     }
     const cf = Store.kgCashflow(stream);
     const einnahmen = cf.kaltmiete * 12, kredit = cf.kreditrate * 12, instand = cf.instandhaltung * 12, netto = cf.netto * 12;
@@ -905,7 +938,7 @@
       '<tr class="total"><td>Summe</td><td class="num">' + fmtEur(einnahmen) + '</td><td class="num">− ' + fmtEur(kredit + instand) + '</td><td class="num">' + fmtEur(netto) + "</td></tr>" +
       "</tbody></table></div></div>";
 
-    return head(streamLabel(stream), "Einnahmen / Ausgaben", "") + '<div class="grid-2">' + summary + perObj + "</div>";
+    return head(streamLabel(stream), "Einnahmen / Ausgaben", actions) + '<div class="grid-2">' + summary + perObj + "</div>";
   }
 
   /* ================= CHATBOT ================= */
@@ -1028,7 +1061,7 @@
       '<button class="btn btn-danger" data-action="clear-all">Alles löschen</button></div></div>' +
 
       '<div class="panel"><div class="panel-head"><h3 class="panel-title">Über</h3></div>' +
-      '<p class="panel-note">Carlos · Personal ERP – Version 4.5. Vermögenscockpit mit Login &amp; Cloud-Sync (Supabase, RLS).<br>' +
+      '<p class="panel-note">Carlos · Personal ERP – Version 4.6. Vermögenscockpit mit Login &amp; Cloud-Sync (Supabase, RLS).<br>' +
       "Geplant: automatische Bankanbindung, Live-Kurse, Dokumenten-Upload &amp; -Suche (RAG) für den Chatbot.</p></div>";
   }
 
@@ -1364,6 +1397,53 @@
     if (first) ui.pnlJahr = Number(first.jahr);
     closeModal(); render();
   }
+  function pnlNum(id) { const x = el(id); return x && x.value !== "" ? Number(x.value) : 0; }
+  function pnlFormHard() {
+    return { tage: pnlNum("pf_tage"), eurNacht: pnlNum("pf_eurNacht"), fee: pnlNum("pf_fee"), iva: pnlNum("pf_iva"),
+      reparaturen: pnlNum("pf_reparaturen"), nebenkosten: pnlNum("pf_nebenkosten"), adjustments: pnlNum("pf_adjustments"), sonstige: pnlNum("pf_sonstige") };
+  }
+  function updatePnlPreview() {
+    const box = el("pnlPreview"); if (!box) return;
+    const c = pnlCompute(pnlFormHard());
+    function r(l, v, cls, strong) { return '<div class="pnl-prev-row' + (strong ? " pnl-prev-strong" : "") + '"><span>' + l + '</span><b class="' + (cls || "") + '">' + v + "</b></div>"; }
+    box.innerHTML =
+      r("Umsatz", fmtEur(c.umsatz), "pos") +
+      r("Total Fee", "− " + fmtEur(c.totalFee), "neg") +
+      r("Total Kosten", "− " + fmtEur(c.total), "neg") +
+      r("EBIT", fmtEur(c.ebit), "", true) +
+      r("ESt. (35 %)", "− " + fmtEur(c.est), "neg") +
+      r("Gewinn n. St.", fmtEur(c.gewinn), "", true);
+  }
+  function openPnlMonthForm(stream, jahr, monat) {
+    const entry = Store.getStreamPnl(stream).filter(function (e) { return e.jahr === jahr; })[0];
+    const h = pnlHard(entry && entry.monate ? entry.monate[monat] : null);
+    function f(id, label, val) {
+      return '<div class="form-row"><label for="' + id + '">' + label + '</label><input id="' + id + '" type="number" step="any" inputmode="decimal" value="' + (val ? round2(val) : "") + '"></div>';
+    }
+    openModal(
+      '<div class="modal-head"><h3>' + PNL_MONATE[monat] + " " + jahr + " · " + esc(streamLabel(stream)) + '</h3><button class="icon-btn" data-action="close-modal">✕</button></div>' +
+      '<form id="pnlMonthForm"><div class="modal-body">' +
+      '<p class="hint" style="margin-bottom:10px">Eingabewerte (händisch). Umsatz, Total Fee, Total, EBIT, ESt. und Gewinn werden automatisch berechnet.</p>' +
+      '<div class="form-grid">' +
+      f("pf_tage", "Nächte", h.tage) + f("pf_eurNacht", "€ / Nacht", h.eurNacht) +
+      f("pf_fee", "Fee (15 %)", h.fee) + f("pf_iva", "IVA (21 %)", h.iva) +
+      f("pf_reparaturen", "Reparaturen", h.reparaturen) + f("pf_nebenkosten", "Nebenkosten", h.nebenkosten) +
+      f("pf_adjustments", "Adjustments", h.adjustments) + f("pf_sonstige", "Sonstige", h.sonstige) +
+      "</div>" +
+      '<div class="pnl-preview" id="pnlPreview"></div>' +
+      '</div><div class="modal-foot"><span class="spacer"></span>' +
+      '<button type="button" class="btn btn-ghost" data-action="close-modal">Abbrechen</button>' +
+      '<button type="submit" class="btn btn-primary">Speichern</button></div></form>'
+    );
+    el("modal").dataset.form = "pnlmonth"; el("modal").dataset.stream = stream; el("modal").dataset.jahr = jahr; el("modal").dataset.monat = monat;
+    updatePnlPreview();
+    el("pf_tage").focus();
+  }
+  function submitPnlMonthForm() {
+    const m = el("modal");
+    Store.updateStreamPnlMonth(m.dataset.stream, Number(m.dataset.jahr), Number(m.dataset.monat), pnlFormHard());
+    closeModal(); render();
+  }
 
   /* ================= Datei-Download / Import ================= */
   function download(name, content, mime) {
@@ -1558,6 +1638,12 @@
       case "import-pnl": openPnlImport(target.dataset.stream || ui.stream || "stream2"); break;
       case "pnl-year": ui.pnlJahr = Number(target.dataset.jahr); render(); break;
       case "pnl-file": if (el("f_pnlfile")) el("f_pnlfile").click(); break;
+      case "edit-pnl-month": openPnlMonthForm(target.dataset.stream, Number(target.dataset.jahr), Number(target.dataset.monat)); break;
+      case "add-pnl-year": {
+        const s = target.dataset.stream || ui.stream || "stream2";
+        const y = prompt("Welches Jahr anlegen?", String(new Date().getFullYear()));
+        if (y && /^\d{4}$/.test(String(y).trim())) { const yy = Number(String(y).trim()); Store.addStreamPnlYear(s, yy); ui.pnlJahr = yy; render(); }
+      } break;
       case "save-snapshot": Store.addSnapshot(); render(); break;
       case "delete-snapshot": if (confirm("Snapshot löschen?")) { Store.deleteSnapshot(id); render(); } break;
       case "chat-suggest": sendChat(target.dataset.q); break;
@@ -1578,11 +1664,13 @@
     else if (e.target.id === "kpForm") { e.preventDefault(); submitKontenplanForm(); }
     else if (e.target.id === "sachkontoForm") { e.preventDefault(); submitSachkontoForm(); }
     else if (e.target.id === "pnlImportForm") { e.preventDefault(); submitPnlImport(); }
+    else if (e.target.id === "pnlMonthForm") { e.preventDefault(); submitPnlMonthForm(); }
     else if (e.target.id === "noteForm") { e.preventDefault(); const t = el("f_note").value.trim(); if (t) { Store.addPartnerNote(ui.partnerId, t); render(); } }
     else if (e.target.id === "chatForm") { e.preventDefault(); const i = el("chatInput"); sendChat(i.value); }
   }
   function onInput(e) {
     if (e.target.closest && e.target.closest("#assetForm")) updateAssetPreview();
+    if (e.target.closest && e.target.closest("#pnlMonthForm")) updatePnlPreview();
     if (e.target.classList && e.target.classList.contains("field-err")) e.target.classList.remove("field-err");
   }
   function onChange(e) {

@@ -539,6 +539,29 @@ const Store = (function () {
     state.streamPnl = (state.streamPnl || []).filter(function (e) { return !(e.stream === stream && e.jahr === Number(jahr)); });
     save();
   }
+  // Einen Monat mit den harten (händischen) Feldern aktualisieren; legt Jahr/Monate bei Bedarf an
+  function updateStreamPnlMonth(stream, jahr, idx, hard) {
+    if (!Array.isArray(state.streamPnl)) state.streamPnl = [];
+    jahr = Number(jahr);
+    let e = state.streamPnl.filter(function (x) { return x.stream === stream && x.jahr === jahr; })[0];
+    if (!e) { e = { id: uid(), stream: String(stream), jahr: jahr, monate: [] }; state.streamPnl.push(e); }
+    if (!Array.isArray(e.monate)) e.monate = [];
+    while (e.monate.length < 12) e.monate.push({});
+    const h = hard || {};
+    e.monate[idx] = {
+      tage: num(h.tage), eurNacht: num(h.eurNacht), fee: num(h.fee), iva: num(h.iva),
+      reparaturen: num(h.reparaturen), nebenkosten: num(h.nebenkosten), adjustments: num(h.adjustments), sonstige: num(h.sonstige)
+    };
+    save();
+  }
+  function addStreamPnlYear(stream, jahr) {
+    if (!Array.isArray(state.streamPnl)) state.streamPnl = [];
+    jahr = Number(jahr);
+    if (state.streamPnl.some(function (x) { return x.stream === stream && x.jahr === jahr; })) return false;
+    const monate = []; for (let i = 0; i < 12; i++) monate.push({});
+    state.streamPnl.push({ id: uid(), stream: String(stream), jahr: jahr, monate: monate });
+    save(); return true;
+  }
 
   /* ---------------------------------------------------------
      News (kuratierter Beispiel-Feed – live-Feed folgt später)
@@ -722,6 +745,7 @@ const Store = (function () {
     getKontenplaene: getKontenplaene, getKontenplan: getKontenplan, addKontenplan: addKontenplan, updateKontenplan: updateKontenplan, deleteKontenplan: deleteKontenplan,
     addSachkonto: addSachkonto, updateSachkonto: updateSachkonto, deleteSachkonto: deleteSachkonto, KONTOARTEN: KONTOARTEN,
     getStreamPnl: getStreamPnl, importStreamPnl: importStreamPnl, deleteStreamPnl: deleteStreamPnl,
+    updateStreamPnlMonth: updateStreamPnlMonth, addStreamPnlYear: addStreamPnlYear,
     getNews: getNews,
     getSnapshots: getSnapshots, addSnapshot: addSnapshot, deleteSnapshot: deleteSnapshot,
     // Export & Cloud-Sync

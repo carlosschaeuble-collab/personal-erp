@@ -192,6 +192,19 @@ h1, h2, h3 { font-family: var(--sans); }
 .pnl-table { font-size: 13px; }
 .pnl-table th, .pnl-table td { white-space: nowrap; padding: 7px 10px; }
 .pnl-table th:first-child, .pnl-table td:first-child { position: sticky; left: 0; background: var(--panel); text-align: left; font-weight: 500; }
+.pnl-table thead th { color: var(--muted); border-bottom: 1px solid var(--line); font-weight: 600; }
+.pnl-table tbody td { border-top: 1px solid var(--line-soft); }
+.pnl-calc td { background: var(--panel-2); font-weight: 600; color: var(--text); }
+.pnl-table tbody tr.pnl-calc td:first-child { background: var(--panel-2); }
+.pnl-strong td { border-top: 1px solid var(--line); }
+.pnl-strong td:first-child { font-weight: 700; }
+.pnl-zero { color: #c7ced6; }
+.pnl-mbtn { background: none; border: 0; font: inherit; font-weight: 600; color: var(--text-2); cursor: pointer; padding: 3px 7px; border-radius: 6px; }
+.pnl-mbtn:hover { background: var(--accent-soft); color: var(--accent-strong); }
+.pnl-preview { margin-top: 14px; padding: 12px 15px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; }
+.pnl-prev-row { display: flex; justify-content: space-between; align-items: baseline; padding: 4px 0; font-size: 14px; color: var(--text-2); }
+.pnl-prev-row b { font-variant-numeric: tabular-nums; color: var(--text); }
+.pnl-prev-strong { border-top: 1px solid var(--line); margin-top: 5px; padding-top: 8px; font-weight: 600; }
 
 /* ---------------- Panels ---------------- */
 .panel {

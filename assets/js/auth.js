@@ -38,8 +38,16 @@
     if (error) throw error;
     return data ? data.data : null;
   }
+  // Schutz: Ein leerer/Default-Zustand darf NIEMALS die Cloud überschreiben (verhindert Datenverlust)
+  function hasData(d) {
+    if (!d) return false;
+    return ["assets", "partners", "buchungskreise", "kontenplaene", "streamPnl", "termine", "snapshots"]
+      .some(function (k) { return Array.isArray(d[k]) && d[k].length > 0; });
+  }
   async function upload(uid) {
-    const { error } = await sb.from("app_state").upsert({ user_id: uid, data: Store.getRawState() }, { onConflict: "user_id" });
+    const data = Store.getRawState();
+    if (!hasData(data)) { console.warn("Upload übersprungen: leerer Zustand (Cloud-Schutz)."); return; }
+    const { error } = await sb.from("app_state").upsert({ user_id: uid, data: data }, { onConflict: "user_id" });
     if (error) console.warn("Sync-Fehler:", error.message);
   }
   function scheduleSync() {
@@ -52,6 +60,7 @@
   // Letzte Änderung beim Schließen best-effort sichern (keepalive)
   function flushOnUnload() {
     if (!user || !accessToken) return;
+    if (!hasData(Store.getRawState())) return; // Cloud-Schutz: nie leeren Zustand speichern
     try {
       fetch(cfg.SUPABASE_URL + "/rest/v1/app_state", {
         method: "POST",

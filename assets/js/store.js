@@ -140,6 +140,9 @@ const Store = (function () {
     buchungskreise: [],
     kontenplaene: [],
     streamPnl: [],
+    txKategorien: [],
+    txRegeln: [],
+    transaktionen: [],
     termine: [],
     snapshots: [],
     settings: {}
@@ -163,6 +166,9 @@ const Store = (function () {
           buchungskreise: Array.isArray(p.buchungskreise) ? p.buchungskreise : [],
           kontenplaene: Array.isArray(p.kontenplaene) ? p.kontenplaene : [],
           streamPnl: Array.isArray(p.streamPnl) ? p.streamPnl : [],
+          txKategorien: Array.isArray(p.txKategorien) ? p.txKategorien : [],
+          txRegeln: Array.isArray(p.txRegeln) ? p.txRegeln : [],
+          transaktionen: Array.isArray(p.transaktionen) ? p.transaktionen : [],
           termine: Array.isArray(p.termine) ? p.termine : [],
           snapshots: Array.isArray(p.snapshots) ? p.snapshots : [],
           settings: p.settings || {}
@@ -200,6 +206,9 @@ const Store = (function () {
       buchungskreise: Array.isArray(obj.buchungskreise) ? obj.buchungskreise : [],
       kontenplaene: Array.isArray(obj.kontenplaene) ? obj.kontenplaene : [],
       streamPnl: Array.isArray(obj.streamPnl) ? obj.streamPnl : [],
+      txKategorien: Array.isArray(obj.txKategorien) ? obj.txKategorien : [],
+      txRegeln: Array.isArray(obj.txRegeln) ? obj.txRegeln : [],
+      transaktionen: Array.isArray(obj.transaktionen) ? obj.transaktionen : [],
       termine: Array.isArray(obj.termine) ? obj.termine : [],
       snapshots: Array.isArray(obj.snapshots) ? obj.snapshots : [],
       settings: obj.settings || {}
@@ -563,6 +572,41 @@ const Store = (function () {
     save(); return true;
   }
 
+  /* ---- Bank-Transaktionen: Kategorien, Lernregeln, Buchungen ---- */
+  const DEFAULT_TX_KATEGORIEN = ["Lebensmittel", "Bars & Restaurants", "Gesundheit & Drogerien", "Shopping", "Transport", "Freizeit", "Wohnen & Energie", "Berufsausgaben", "Sonstiges", "Einnahmen", "Miete", "Versicherung", "Kreditkarte", "Intern / Umbuchung"];
+  function getTxKategorien() {
+    if (!Array.isArray(state.txKategorien) || !state.txKategorien.length) state.txKategorien = DEFAULT_TX_KATEGORIEN.slice();
+    return state.txKategorien.slice();
+  }
+  function addTxKategorie(name) {
+    name = String(name || "").trim(); if (!name) return;
+    if (!Array.isArray(state.txKategorien) || !state.txKategorien.length) state.txKategorien = DEFAULT_TX_KATEGORIEN.slice();
+    if (state.txKategorien.indexOf(name) < 0) { state.txKategorien.push(name); save(); }
+  }
+  function deleteTxKategorie(name) { state.txKategorien = (state.txKategorien || []).filter(function (k) { return k !== name; }); save(); }
+  function getTxRegeln() { return (state.txRegeln || []).slice(); }
+  // Lernen: Schlüsselwort (kleingeschrieben) → Kategorie; ersetzt Regel mit gleichem match
+  function setTxRegel(match, kategorie) {
+    match = String(match || "").trim().toLowerCase(); if (!match || !kategorie) return;
+    if (!Array.isArray(state.txRegeln)) state.txRegeln = [];
+    state.txRegeln = state.txRegeln.filter(function (r) { return r.match !== match; });
+    state.txRegeln.push({ id: uid(), match: match, kategorie: kategorie });
+    save();
+  }
+  function deleteTxRegel(id) { state.txRegeln = (state.txRegeln || []).filter(function (r) { return r.id !== id; }); save(); }
+  function getTransaktionen() { return (state.transaktionen || []).slice(); }
+  function addTransaktionen(list) {
+    if (!Array.isArray(list) || !list.length) return 0;
+    if (!Array.isArray(state.transaktionen)) state.transaktionen = [];
+    list.forEach(function (t) { state.transaktionen.push(t); });
+    save(); return list.length;
+  }
+  function deleteTransaktion(id) { state.transaktionen = (state.transaktionen || []).filter(function (t) { return t.id !== id; }); save(); }
+  function clearTransaktionen(konto) {
+    state.transaktionen = (state.transaktionen || []).filter(function (t) { return konto ? t.konto !== konto : false; });
+    save();
+  }
+
   /* ---------------------------------------------------------
      News (kuratierter Beispiel-Feed – live-Feed folgt später)
      --------------------------------------------------------- */
@@ -609,6 +653,9 @@ const Store = (function () {
       buchungskreise: Array.isArray(p.buchungskreise) ? p.buchungskreise : [],
       kontenplaene: Array.isArray(p.kontenplaene) ? p.kontenplaene : [],
       streamPnl: Array.isArray(p.streamPnl) ? p.streamPnl : [],
+      txKategorien: Array.isArray(p.txKategorien) ? p.txKategorien : [],
+      txRegeln: Array.isArray(p.txRegeln) ? p.txRegeln : [],
+      transaktionen: Array.isArray(p.transaktionen) ? p.transaktionen : [],
       termine: Array.isArray(p.termine) ? p.termine : [],
       snapshots: Array.isArray(p.snapshots) ? p.snapshots : [],
       settings: p.settings || {}
@@ -639,7 +686,7 @@ const Store = (function () {
   }
 
   function clearAll() {
-    state.assets = []; state.partners = []; state.buchungskreise = []; state.kontenplaene = []; state.streamPnl = []; state.termine = []; state.snapshots = [];
+    state.assets = []; state.partners = []; state.buchungskreise = []; state.kontenplaene = []; state.streamPnl = []; state.txKategorien = []; state.txRegeln = []; state.transaktionen = []; state.termine = []; state.snapshots = [];
     save();
   }
 
@@ -746,6 +793,9 @@ const Store = (function () {
     addSachkonto: addSachkonto, updateSachkonto: updateSachkonto, deleteSachkonto: deleteSachkonto, KONTOARTEN: KONTOARTEN,
     getStreamPnl: getStreamPnl, importStreamPnl: importStreamPnl, deleteStreamPnl: deleteStreamPnl,
     updateStreamPnlMonth: updateStreamPnlMonth, addStreamPnlYear: addStreamPnlYear,
+    getTxKategorien: getTxKategorien, addTxKategorie: addTxKategorie, deleteTxKategorie: deleteTxKategorie,
+    getTxRegeln: getTxRegeln, setTxRegel: setTxRegel, deleteTxRegel: deleteTxRegel,
+    getTransaktionen: getTransaktionen, addTransaktionen: addTransaktionen, deleteTransaktion: deleteTransaktion, clearTransaktionen: clearTransaktionen,
     getNews: getNews,
     getSnapshots: getSnapshots, addSnapshot: addSnapshot, deleteSnapshot: deleteSnapshot,
     // Export & Cloud-Sync

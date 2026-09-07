@@ -41,7 +41,7 @@
   // Schutz: Ein leerer/Default-Zustand darf NIEMALS die Cloud überschreiben (verhindert Datenverlust)
   function hasData(d) {
     if (!d) return false;
-    return ["assets", "partners", "buchungskreise", "kontenplaene", "streamPnl", "termine", "snapshots"]
+    return ["assets", "partners", "buchungskreise", "kontenplaene", "streamPnl", "transaktionen", "termine", "snapshots"]
       .some(function (k) { return Array.isArray(d[k]) && d[k].length > 0; });
   }
   async function upload(uid) {

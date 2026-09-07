@@ -199,6 +199,9 @@ h1, h2, h3 { font-family: var(--sans); }
 .pnl-strong td { border-top: 1px solid var(--line); }
 .pnl-strong td:first-child { font-weight: 700; }
 .pnl-zero { color: #c7ced6; }
+.tx-unklar td { background: #fff7ec; }
+.tx-unklar td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.tx-cat { max-width: 200px; }
 .pnl-mbtn { background: none; border: 0; font: inherit; font-weight: 600; color: var(--text-2); cursor: pointer; padding: 3px 7px; border-radius: 6px; }
 .pnl-mbtn:hover { background: var(--accent-soft); color: var(--accent-strong); }
 .pnl-preview { margin-top: 14px; padding: 12px 15px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; }

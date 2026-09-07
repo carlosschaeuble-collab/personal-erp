@@ -72,7 +72,7 @@
     { section: "termine", label: "Termine", icon: "termine" }
   ];
 
-  const ui = { section: "uebersicht", kat: null, stream: null, partnerId: null, kontenplanId: null, pnlJahr: null, filter: "alles", expanded: { zentrale: true, privat: true, geschaeftlich: true, investments: true, stream1: true, stream2: true }, chat: [] };
+  const ui = { section: "uebersicht", kat: null, stream: null, partnerId: null, kontenplanId: null, pnlJahr: null, pendingImport: null, showTx: false, filter: "alles", expanded: { zentrale: true, privat: true, geschaeftlich: true, investments: true, stream1: true, stream2: true }, chat: [] };
   let assetDocs = []; // Arbeitskopie der Dokumente im geöffneten Asset-Formular
 
   // Welche Assets erlauben Datei-Anhänge (z. B. Mietvertrag)? → vermietete KG-Immobilien
@@ -412,7 +412,11 @@
   function bankHtml(bereich) {
     const meta = Store.KATEGORIEN.bank;
     const eyebrow = Store.BEREICHE[bereich].label;
-    const right = '<button class="btn btn-primary" data-action="add-asset" data-bereich="' + bereich + '" data-kat="bank">＋ Hinzufügen</button>';
+    const right = '<div class="btn-row">' +
+      '<button class="btn btn-primary" data-action="add-asset" data-bereich="' + bereich + '" data-kat="bank">＋ Konto</button>' +
+      '<button class="btn" data-action="upload-statement">⬆︎ Kontoauszug (PDF)</button>' +
+      '<button class="btn btn-ghost" data-action="show-tx">Umsätze</button>' +
+      '<input type="file" id="stmtFile" accept="application/pdf,.pdf" class="hidden"></div>';
     const accounts = Store.getAssets({ bereich: bereich, kategorie: "bank" }).sort(function (a, b) { return Store.computeValue(b) - Store.computeValue(a); });
     if (!accounts.length) {
       return head(eyebrow, meta.label, right) +
@@ -439,6 +443,147 @@
         '<div class="bank-card-bar"><span style="width:' + share.toFixed(1) + '%"></span></div></div>';
     }).join("") + "</div>";
     return head(eyebrow, meta.label, right) + kpis + cards;
+  }
+
+  /* ================= KONTOAUSZUG-IMPORT (PDF, lernend) ================= */
+  let pdfjsReady = null;
+  function loadPdfJs() {
+    if (pdfjsReady) return pdfjsReady;
+    pdfjsReady = new Promise(function (resolve, reject) {
+      function ok() { try { window.pdfjsLib.GlobalWorkerOptions.workerSrc = "assets/vendor/pdf.worker.min.js"; } catch (e) {} resolve(window.pdfjsLib); }
+      if (window.pdfjsLib) return ok();
+      const s = document.createElement("script");
+      s.src = "assets/vendor/pdf.min.js";
+      s.onload = function () { if (window.pdfjsLib) ok(); else reject(new Error("pdf.js nicht verfügbar")); };
+      s.onerror = function () { reject(new Error("pdf.js konnte nicht geladen werden")); };
+      document.head.appendChild(s);
+    });
+    return pdfjsReady;
+  }
+  async function pdfToLines(arrayBuffer) {
+    const lib = await loadPdfJs();
+    const pdf = await lib.getDocument({ data: arrayBuffer }).promise;
+    const lines = [];
+    for (let p = 1; p <= pdf.numPages; p++) {
+      const page = await pdf.getPage(p);
+      const tc = await page.getTextContent();
+      const rows = {};
+      tc.items.forEach(function (it) { const y = Math.round(it.transform[5]); (rows[y] = rows[y] || []).push({ x: it.transform[4], s: it.str }); });
+      Object.keys(rows).map(Number).sort(function (a, b) { return b - a; }).forEach(function (y) {
+        const l = rows[y].sort(function (a, b) { return a.x - b.x; }).map(function (o) { return o.s; }).join(" ").replace(/\s+/g, " ").trim();
+        if (l) lines.push(l);
+      });
+    }
+    return lines;
+  }
+  function parseBetragStr(s) { return Number(String(s).replace(/\./g, "").replace(",", ".")); }
+  function toIsoDate(d) { const p = String(d).split("."); return p.length === 3 ? p[2] + "-" + p[1] + "-" + p[0] : d; }
+  function parseN26(lines) {
+    const txRe = /^(.*\S)\s+(\d{2}\.\d{2}\.\d{4})\s+([+-][\d.]+,\d{2})\s*€$/;
+    const skip = /^(Kontoaktivität|Beschreibung Verbuchungsdatum|CARLOS SCH|Fichtenweg|BIC:|KYRA|Mersinweg|N26 Bank SE|HRB|Dombret|Finanzdienstl|com \| https|Kontotyp)/;
+    const txns = []; let cur = null;
+    lines.forEach(function (raw) {
+      const line = raw.trim(); if (!line) return;
+      const m = line.match(txRe);
+      if (m) { cur = { datum: toIsoDate(m[2]), datumStr: m[2], empfaenger: m[1].trim(), betrag: parseBetragStr(m[3]), n26kat: null, typ: null, ref: [] }; txns.push(cur); return; }
+      if (!cur) return;
+      if (/^Wertstellung/.test(line)) return;
+      if (/^IBAN:/.test(line)) { cur.ref.push(line); return; }
+      if (line.indexOf(" • ") >= 0) { const parts = line.split(" • "); cur.typ = parts[0].trim(); cur.n26kat = parts.slice(1).join(" • ").trim(); return; }
+      if (/^(Mastercard|Maestro|Visa|Girocard)$/.test(line)) { cur.typ = line; return; }
+      if (/^(Lastschriften|Gutschriften|Belastungen|Überweisung|Dauerauftrag|Gebühren)$/.test(line)) { cur.typ = line; return; }
+      if (!skip.test(line)) cur.ref.push(line);
+    });
+    return txns;
+  }
+  function categorizeTx(t, regeln, kategorien) {
+    const hay = (t.empfaenger + " " + (t.ref || []).join(" ")).toLowerCase();
+    for (let i = 0; i < regeln.length; i++) { if (regeln[i].match && hay.indexOf(regeln[i].match) >= 0) return { kat: regeln[i].kategorie, quelle: "regel" }; }
+    if (t.n26kat && kategorien.indexOf(t.n26kat) >= 0) return { kat: t.n26kat, quelle: "n26" };
+    return { kat: "", quelle: "" };
+  }
+  async function handleStatementFile(file) {
+    if (!file) return;
+    const vc = el("viewContainer");
+    if (vc) vc.innerHTML = '<div class="panel"><p style="padding:24px;font-size:15px">📄 Lese Kontoauszug „' + esc(file.name) + '" … (das kann ein paar Sekunden dauern)</p></div>';
+    try {
+      const buf = await file.arrayBuffer();
+      const lines = await pdfToLines(buf);
+      const txns = parseN26(lines);
+      if (!txns.length) { alert("Keine Buchungen erkannt. Aktuell wird das N26-PDF-Format unterstützt."); render(); return; }
+      const regeln = Store.getTxRegeln(), kats = Store.getTxKategorien();
+      txns.forEach(function (t) { const c = categorizeTx(t, regeln, kats); t.kategorie = c.kat; t.quelle = c.quelle; t.manual = false; });
+      ui.pendingImport = { dateiname: file.name, konto: "N26", txns: txns };
+      render();
+    } catch (e) { alert("Konnte den Auszug nicht lesen: " + (e && e.message || e)); render(); }
+  }
+  function reviewHtml() {
+    const imp = ui.pendingImport, txns = imp.txns, kats = Store.getTxKategorien();
+    const unklar = txns.filter(function (t) { return !t.kategorie; }).length;
+    const sum = txns.reduce(function (s, t) { return s + t.betrag; }, 0);
+    const right = '<div class="btn-row"><button class="btn btn-ghost" data-action="review-cancel">Abbrechen</button>' +
+      '<button class="btn btn-primary" data-action="review-save">Übernehmen</button></div>';
+    const kpis = '<div class="kpis kpis-3">' +
+      kpi("Buchungen", txns.length, { foot: imp.konto + " · " + esc(imp.dateiname) }) +
+      kpi("Saldo", fmtEur(sum), { accent: true, footClass: sum >= 0 ? "up" : "down", foot: "im Auszug" }) +
+      kpi("Unklar", unklar, { foot: unklar ? "bitte zuordnen" : "alle zugeordnet", footClass: unklar ? "down" : "up" }) +
+      "</div>";
+    const order = txns.map(function (t, i) { return i; }).sort(function (a, b) {
+      const ua = txns[a].kategorie ? 1 : 0, ub = txns[b].kategorie ? 1 : 0;
+      if (ua !== ub) return ua - ub;
+      return txns[a].datum < txns[b].datum ? -1 : (txns[a].datum > txns[b].datum ? 1 : 0);
+    });
+    function opts(sel) {
+      return '<option value=""' + (!sel ? " selected" : "") + ">– unklar –</option>" +
+        kats.map(function (k) { return '<option' + (k === sel ? " selected" : "") + ">" + esc(k) + "</option>"; }).join("");
+    }
+    const rows = order.map(function (i) {
+      const t = txns[i];
+      const q = t.quelle === "n26" ? '<span class="pill">N26</span>' : (t.quelle === "regel" ? '<span class="pill">gelernt</span>' : "");
+      return '<tr' + (t.kategorie ? "" : ' class="tx-unklar"') + ">" +
+        '<td class="num">' + t.datumStr + "</td>" +
+        "<td>" + esc(t.empfaenger) + (t.n26kat ? ' <span class="muted">· ' + esc(t.n26kat) + "</span>" : "") + "</td>" +
+        '<td class="num ' + (t.betrag < 0 ? "neg" : "pos") + '">' + fmtEur(t.betrag) + "</td>" +
+        '<td><select class="tx-cat" data-idx="' + i + '">' + opts(t.kategorie) + "</select> " + q + "</td></tr>";
+    }).join("");
+    const table = '<div class="panel"><div style="overflow-x:auto"><table class="ptable"><thead><tr><th class="num">Datum</th><th>Empfänger</th><th class="num">Betrag</th><th>Kategorie</th></tr></thead><tbody>' + rows + "</tbody></table></div>" +
+      '<p class="panel-note">Unklare Posten sind oben hervorgehoben. Setzt du eine Kategorie <b>manuell</b>, merkt sich die App den Empfänger und ordnet ihn künftig automatisch zu. „N26" = von N26 vorgegeben, „gelernt" = aus deiner früheren Zuordnung.</p></div>';
+    return head("Bankkonten · Import", "Kontoauszug prüfen", right) + kpis + table;
+  }
+  function saveReview() {
+    const imp = ui.pendingImport; if (!imp) return;
+    const existing = {};
+    Store.getTransaktionen().forEach(function (t) { existing[t.datum + "|" + t.betrag + "|" + t.empfaenger] = true; });
+    const now = new Date().toISOString();
+    const toSave = []; let dup = 0;
+    imp.txns.forEach(function (t, i) {
+      if (t.manual && t.kategorie) Store.setTxRegel(t.empfaenger.toLowerCase(), t.kategorie);
+      const key = t.datum + "|" + t.betrag + "|" + t.empfaenger;
+      if (existing[key]) { dup++; return; }
+      existing[key] = true;
+      toSave.push({ id: "tx_" + Date.now().toString(36) + "_" + i, konto: imp.konto, datum: t.datum, datumStr: t.datumStr, empfaenger: t.empfaenger, betrag: t.betrag, kategorie: t.kategorie || "", n26kat: t.n26kat || "", typ: t.typ || "", ref: t.ref || [], quelle: t.quelle || "", importedAt: now });
+    });
+    Store.addTransaktionen(toSave);
+    ui.pendingImport = null; ui.showTx = true;
+    render();
+    if (dup) setTimeout(function () { alert(toSave.length + " Buchungen übernommen · " + dup + " Duplikate übersprungen (bereits importiert)."); }, 60);
+  }
+  function transaktionenHtml() {
+    const txns = Store.getTransaktionen().slice().sort(function (a, b) { return a.datum < b.datum ? 1 : (a.datum > b.datum ? -1 : 0); });
+    const right = '<div class="btn-row"><button class="btn" data-action="upload-statement">⬆︎ Kontoauszug (PDF)</button>' +
+      '<button class="btn btn-ghost" data-action="tx-back">← Zurück</button>' +
+      '<input type="file" id="stmtFile" accept="application/pdf,.pdf" class="hidden"></div>';
+    if (!txns.length) return head("Bankkonten", "Umsätze", right) + emptyState("§", "Noch keine Umsätze", "Lade in Bankkonten einen Kontoauszug (PDF) hoch – die kategorisierten Buchungen erscheinen hier.", "");
+    const byKat = {}; txns.forEach(function (t) { const k = t.kategorie || "(unklar)"; byKat[k] = (byKat[k] || 0) + t.betrag; });
+    const katRows = Object.keys(byKat).sort(function (a, b) { return byKat[a] - byKat[b]; }).map(function (k) { return row(esc(k), fmtEur(byKat[k]), byKat[k] < 0 ? "neg" : "pos"); }).join("");
+    const total = txns.reduce(function (s, t) { return s + t.betrag; }, 0);
+    const summary = '<div class="panel"><div class="panel-head"><h3 class="panel-title">Nach Kategorie</h3></div><table class="ptable"><tbody>' + katRows +
+      '<tr class="total"><td>Saldo gesamt</td><td class="num">' + fmtEur(total) + "</td></tr></tbody></table></div>";
+    const listRows = txns.slice(0, 500).map(function (t) {
+      return '<tr><td class="num">' + (t.datumStr || t.datum) + "</td><td>" + esc(t.empfaenger) + '</td><td class="num ' + (t.betrag < 0 ? "neg" : "pos") + '">' + fmtEur(t.betrag) + "</td><td>" + (t.kategorie ? esc(t.kategorie) : '<span class="muted">unklar</span>') + "</td></tr>";
+    }).join("");
+    const list = '<div class="panel"><div class="panel-head"><h3 class="panel-title">Buchungen (' + txns.length + ')</h3></div><div style="overflow-x:auto"><table class="ptable"><thead><tr><th class="num">Datum</th><th>Empfänger</th><th class="num">Betrag</th><th>Kategorie</th></tr></thead><tbody>' + listRows + "</tbody></table></div></div>";
+    return head("Bankkonten", "Umsätze / Auswertung", right) + summary + list;
   }
 
   /* ================= PORTFOLIO-ANSICHT (Wertpapiere) ================= */
@@ -1061,7 +1206,7 @@
       '<button class="btn btn-danger" data-action="clear-all">Alles löschen</button></div></div>' +
 
       '<div class="panel"><div class="panel-head"><h3 class="panel-title">Über</h3></div>' +
-      '<p class="panel-note">Carlos · Personal ERP – Version 4.7. Vermögenscockpit mit Login &amp; Cloud-Sync (Supabase, RLS).<br>' +
+      '<p class="panel-note">Carlos · Personal ERP – Version 4.8. Vermögenscockpit mit Login &amp; Cloud-Sync (Supabase, RLS).<br>' +
       "Geplant: automatische Bankanbindung, Live-Kurse, Dokumenten-Upload &amp; -Suche (RAG) für den Chatbot.</p></div>";
   }
 
@@ -1526,6 +1671,8 @@
   }
 
   function viewHtml() {
+    if (ui.pendingImport) return reviewHtml();
+    if (ui.showTx) return transaktionenHtml();
     switch (ui.section) {
       case "uebersicht": return uebersichtHtml();
       case "zentrale":
@@ -1595,6 +1742,7 @@
         ui.stream = target.dataset.stream || null;
         ui.partnerId = null;
         ui.kontenplanId = null;
+        ui.pendingImport = null; ui.showTx = false;
         if (ui.expanded.hasOwnProperty(ui.section)) ui.expanded[ui.section] = true;
         render(); break;
       case "toggle-group":
@@ -1636,6 +1784,11 @@
       case "edit-sachkonto": openSachkontoForm(id); break;
       case "delete-sachkonto": if (confirm("Dieses Sachkonto löschen?")) { Store.deleteSachkonto(ui.kontenplanId, id); closeModal(); render(); } break;
       case "import-pnl": openPnlImport(target.dataset.stream || ui.stream || "stream2"); break;
+      case "upload-statement": { const fi = el("stmtFile"); if (fi) fi.click(); } break;
+      case "show-tx": ui.showTx = true; render(); break;
+      case "tx-back": ui.showTx = false; render(); break;
+      case "review-cancel": ui.pendingImport = null; render(); break;
+      case "review-save": saveReview(); break;
       case "pnl-year": ui.pnlJahr = Number(target.dataset.jahr); render(); break;
       case "pnl-file": if (el("f_pnlfile")) el("f_pnlfile").click(); break;
       case "edit-pnl-month": openPnlMonthForm(target.dataset.stream, Number(target.dataset.jahr), Number(target.dataset.monat)); break;
@@ -1679,6 +1832,8 @@
     if (e.target.id === "partnerDocInput" && e.target.files && e.target.files.length) { handlePartnerDocs(e.target.files); e.target.value = ""; }
     if (e.target.id === "assetDocInput" && e.target.files && e.target.files.length) { handleAssetDocs(e.target.files); e.target.value = ""; }
     if (e.target.id === "f_pnlfile" && e.target.files && e.target.files[0]) { const r = new FileReader(); r.onload = function () { if (el("f_pnljson")) el("f_pnljson").value = String(r.result); }; r.readAsText(e.target.files[0]); e.target.value = ""; }
+    if (e.target.id === "stmtFile" && e.target.files && e.target.files[0]) { handleStatementFile(e.target.files[0]); e.target.value = ""; }
+    if (e.target.classList && e.target.classList.contains("tx-cat") && ui.pendingImport) { const i = Number(e.target.dataset.idx); const t = ui.pendingImport.txns[i]; if (t) { t.kategorie = e.target.value; t.manual = true; t.quelle = e.target.value ? "manuell" : ""; } }
   }
   function onKey(e) {
     if (e.key === "Escape" && !el("modalOverlay").classList.contains("hidden")) closeModal();

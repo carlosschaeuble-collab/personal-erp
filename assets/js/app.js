@@ -582,9 +582,9 @@
     const summary = '<div class="panel"><div class="panel-head"><h3 class="panel-title">Nach Kategorie</h3></div><table class="ptable"><tbody>' + katRows +
       '<tr class="total"><td>Saldo gesamt</td><td class="num">' + fmtEur(total) + "</td></tr></tbody></table></div>";
     const listRows = txns.slice(0, 500).map(function (t) {
-      return '<tr><td class="num">' + (t.datumStr || t.datum) + "</td><td>" + esc(t.empfaenger) + '</td><td class="num ' + (t.betrag < 0 ? "neg" : "pos") + '">' + fmtEur(t.betrag) + "</td><td>" + (t.kategorie ? esc(t.kategorie) : '<span class="muted">unklar</span>') + "</td></tr>";
+      return '<tr data-action="edit-tx" data-id="' + t.id + '" style="cursor:pointer"><td class="num">' + (t.datumStr || t.datum) + "</td><td>" + esc(t.empfaenger) + '</td><td class="num ' + (t.betrag < 0 ? "neg" : "pos") + '">' + fmtEur(t.betrag) + "</td><td>" + (t.kategorie ? esc(t.kategorie) : '<span class="muted">unklar</span>') + "</td></tr>";
     }).join("");
-    const list = '<div class="panel"><div class="panel-head"><h3 class="panel-title">Buchungen (' + txns.length + ')</h3></div><div style="overflow-x:auto"><table class="ptable"><thead><tr><th class="num">Datum</th><th>Empfänger</th><th class="num">Betrag</th><th>Kategorie</th></tr></thead><tbody>' + listRows + "</tbody></table></div></div>";
+    const list = '<div class="panel"><div class="panel-head"><h3 class="panel-title">Buchungen (' + txns.length + ') <span class="muted" style="font-weight:400;font-size:12px">· Zeile anklicken zum Umkategorisieren</span></h3></div><div style="overflow-x:auto"><table class="ptable"><thead><tr><th class="num">Datum</th><th>Empfänger</th><th class="num">Betrag</th><th>Kategorie</th></tr></thead><tbody>' + listRows + "</tbody></table></div></div>";
     return head("Bankkonten", "Umsätze / Auswertung", right) + summary + list;
   }
   function openKatManager() {
@@ -602,6 +602,33 @@
     );
     el("modal").dataset.form = "kat";
     const f = el("f_katname"); if (f) f.focus();
+  }
+  function openTxForm(id) {
+    const t = Store.getTransaktionen().filter(function (x) { return x.id === id; })[0];
+    if (!t) return;
+    const kats = Store.getTxKategorien();
+    const opts = '<option value=""' + (!t.kategorie ? " selected" : "") + ">– unklar –</option>" +
+      kats.map(function (k) { return '<option' + (k === t.kategorie ? " selected" : "") + ">" + esc(k) + "</option>"; }).join("");
+    openModal(
+      '<div class="modal-head"><h3>Buchung bearbeiten</h3><button class="icon-btn" data-action="close-modal">✕</button></div>' +
+      '<form id="txForm"><div class="modal-body">' +
+      '<div class="info-row" style="margin-bottom:14px"><span class="muted">' + (t.datumStr || t.datum) + "</span> · <b>" + esc(t.empfaenger) + '</b> · <span class="' + (t.betrag < 0 ? "neg" : "pos") + '">' + fmtEur(t.betrag) + "</span>" + (t.n26kat ? ' <span class="muted">· N26: ' + esc(t.n26kat) + "</span>" : "") + "</div>" +
+      '<div class="form-row full"><label for="f_txkat">Kategorie</label><select id="f_txkat">' + opts + "</select></div>" +
+      '<label class="check-item" style="margin-top:8px"><input type="checkbox" id="f_txlearn" checked> Empfänger merken (künftige Auszüge automatisch zuordnen)</label>' +
+      "</div><div class=\"modal-foot\"><button type=\"button\" class=\"btn btn-danger\" data-action=\"delete-tx\" data-id=\"" + t.id + "\">Löschen</button>" +
+      '<span class="spacer"></span><button type="button" class="btn btn-ghost" data-action="close-modal">Abbrechen</button>' +
+      '<button type="submit" class="btn btn-primary">Speichern</button></div></form>'
+    );
+    el("modal").dataset.form = "tx"; el("modal").dataset.editId = t.id;
+  }
+  function submitTxForm() {
+    const m = el("modal"), id = m.dataset.editId;
+    const t = Store.getTransaktionen().filter(function (x) { return x.id === id; })[0]; if (!t) { closeModal(); return; }
+    const kat = el("f_txkat").value;
+    const learn = el("f_txlearn") && el("f_txlearn").checked;
+    Store.updateTransaktion(id, { kategorie: kat });
+    if (learn && kat && t.empfaenger) Store.setTxRegel(t.empfaenger.toLowerCase(), kat);
+    closeModal(); render();
   }
 
   /* ================= PORTFOLIO-ANSICHT (Wertpapiere) ================= */
@@ -1224,7 +1251,7 @@
       '<button class="btn btn-danger" data-action="clear-all">Alles löschen</button></div></div>' +
 
       '<div class="panel"><div class="panel-head"><h3 class="panel-title">Über</h3></div>' +
-      '<p class="panel-note">Carlos · Personal ERP – Version 4.9. Vermögenscockpit mit Login &amp; Cloud-Sync (Supabase, RLS).<br>' +
+      '<p class="panel-note">Carlos · Personal ERP – Version 5.0. Vermögenscockpit mit Login &amp; Cloud-Sync (Supabase, RLS).<br>' +
       "Geplant: automatische Bankanbindung, Live-Kurse, Dokumenten-Upload &amp; -Suche (RAG) für den Chatbot.</p></div>";
   }
 
@@ -1809,6 +1836,8 @@
       case "review-save": saveReview(); break;
       case "manage-kats": openKatManager(); break;
       case "delete-kat": if (confirm("Kategorie löschen?")) { Store.deleteTxKategorie(target.dataset.kat); render(); openKatManager(); } break;
+      case "edit-tx": openTxForm(id); break;
+      case "delete-tx": if (confirm("Diese Buchung löschen?")) { Store.deleteTransaktion(id); closeModal(); render(); } break;
       case "pnl-year": ui.pnlJahr = Number(target.dataset.jahr); render(); break;
       case "pnl-file": if (el("f_pnlfile")) el("f_pnlfile").click(); break;
       case "edit-pnl-month": openPnlMonthForm(target.dataset.stream, Number(target.dataset.jahr), Number(target.dataset.monat)); break;
@@ -1839,6 +1868,7 @@
     else if (e.target.id === "pnlImportForm") { e.preventDefault(); submitPnlImport(); }
     else if (e.target.id === "pnlMonthForm") { e.preventDefault(); submitPnlMonthForm(); }
     else if (e.target.id === "katForm") { e.preventDefault(); const n = (el("f_katname").value || "").trim(); if (n) { Store.addTxKategorie(n); render(); openKatManager(); } }
+    else if (e.target.id === "txForm") { e.preventDefault(); submitTxForm(); }
     else if (e.target.id === "noteForm") { e.preventDefault(); const t = el("f_note").value.trim(); if (t) { Store.addPartnerNote(ui.partnerId, t); render(); } }
     else if (e.target.id === "chatForm") { e.preventDefault(); const i = el("chatInput"); sendChat(i.value); }
   }

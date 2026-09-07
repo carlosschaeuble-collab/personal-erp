@@ -602,6 +602,10 @@ const Store = (function () {
     save(); return list.length;
   }
   function deleteTransaktion(id) { state.transaktionen = (state.transaktionen || []).filter(function (t) { return t.id !== id; }); save(); }
+  function updateTransaktion(id, fields) {
+    const t = (state.transaktionen || []).find(function (x) { return x.id === id; });
+    if (t) { if (fields && fields.kategorie !== undefined) t.kategorie = fields.kategorie; save(); }
+  }
   function clearTransaktionen(konto) {
     state.transaktionen = (state.transaktionen || []).filter(function (t) { return konto ? t.konto !== konto : false; });
     save();
@@ -795,7 +799,7 @@ const Store = (function () {
     updateStreamPnlMonth: updateStreamPnlMonth, addStreamPnlYear: addStreamPnlYear,
     getTxKategorien: getTxKategorien, addTxKategorie: addTxKategorie, deleteTxKategorie: deleteTxKategorie,
     getTxRegeln: getTxRegeln, setTxRegel: setTxRegel, deleteTxRegel: deleteTxRegel,
-    getTransaktionen: getTransaktionen, addTransaktionen: addTransaktionen, deleteTransaktion: deleteTransaktion, clearTransaktionen: clearTransaktionen,
+    getTransaktionen: getTransaktionen, addTransaktionen: addTransaktionen, deleteTransaktion: deleteTransaktion, updateTransaktion: updateTransaktion, clearTransaktionen: clearTransaktionen,
     getNews: getNews,
     getSnapshots: getSnapshots, addSnapshot: addSnapshot, deleteSnapshot: deleteSnapshot,
     // Export & Cloud-Sync

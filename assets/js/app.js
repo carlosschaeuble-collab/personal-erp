@@ -593,7 +593,8 @@
     const order = txns.map(function (t, i) { return i; }).sort(function (a, b) {
       const ua = txns[a].kategorie ? 1 : 0, ub = txns[b].kategorie ? 1 : 0;
       if (ua !== ub) return ua - ub;
-      return txns[a].datum < txns[b].datum ? -1 : (txns[a].datum > txns[b].datum ? 1 : 0);
+      if (txns[a].datum !== txns[b].datum) return txns[a].datum < txns[b].datum ? 1 : -1;
+      return b - a;
     });
     function opts(sel) {
       return '<option value=""' + (!sel ? " selected" : "") + ">– unklar –</option>" +
@@ -632,7 +633,9 @@
     if (dup) setTimeout(function () { alert(toSave.length + " Buchungen übernommen · " + dup + " bereits vorhanden (übersprungen)."); }, 60);
   }
   function transaktionenHtml() {
-    const txns = Store.getTransaktionen().slice().sort(function (a, b) { return a.datum < b.datum ? 1 : (a.datum > b.datum ? -1 : 0); });
+    const txns = Store.getTransaktionen().map(function (t, i) { return { t: t, i: i }; })
+      .sort(function (a, b) { if (a.t.datum !== b.t.datum) return a.t.datum < b.t.datum ? 1 : -1; return b.i - a.i; })
+      .map(function (x) { return x.t; });
     const right = '<div class="btn-row"><button class="btn" data-action="upload-statement">⬆︎ Kontoauszug (CSV)</button>' +
       '<button class="btn" data-action="manage-kats">⚙︎ Kategorien</button>' +
       '<button class="btn btn-ghost" data-action="tx-back">← Zurück</button>' +
@@ -1313,7 +1316,7 @@
       '<button class="btn btn-danger" data-action="clear-all">Alles löschen</button></div></div>' +
 
       '<div class="panel"><div class="panel-head"><h3 class="panel-title">Über</h3></div>' +
-      '<p class="panel-note">Carlos · Personal ERP – Version 5.1. Vermögenscockpit mit Login &amp; Cloud-Sync (Supabase, RLS).<br>' +
+      '<p class="panel-note">Carlos · Personal ERP – Version 5.2. Vermögenscockpit mit Login &amp; Cloud-Sync (Supabase, RLS).<br>' +
       "Geplant: automatische Bankanbindung, Live-Kurse, Dokumenten-Upload &amp; -Suche (RAG) für den Chatbot.</p></div>";
   }
 

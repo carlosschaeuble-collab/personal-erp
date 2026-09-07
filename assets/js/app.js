@@ -522,6 +522,7 @@
     const unklar = txns.filter(function (t) { return !t.kategorie; }).length;
     const sum = txns.reduce(function (s, t) { return s + t.betrag; }, 0);
     const right = '<div class="btn-row"><button class="btn btn-ghost" data-action="review-cancel">Abbrechen</button>' +
+      '<button class="btn" data-action="manage-kats">⚙︎ Kategorien</button>' +
       '<button class="btn btn-primary" data-action="review-save">Übernehmen</button></div>';
     const kpis = '<div class="kpis kpis-3">' +
       kpi("Buchungen", txns.length, { foot: imp.konto + " · " + esc(imp.dateiname) }) +
@@ -571,6 +572,7 @@
   function transaktionenHtml() {
     const txns = Store.getTransaktionen().slice().sort(function (a, b) { return a.datum < b.datum ? 1 : (a.datum > b.datum ? -1 : 0); });
     const right = '<div class="btn-row"><button class="btn" data-action="upload-statement">⬆︎ Kontoauszug (PDF)</button>' +
+      '<button class="btn" data-action="manage-kats">⚙︎ Kategorien</button>' +
       '<button class="btn btn-ghost" data-action="tx-back">← Zurück</button>' +
       '<input type="file" id="stmtFile" accept="application/pdf,.pdf" class="hidden"></div>';
     if (!txns.length) return head("Bankkonten", "Umsätze", right) + emptyState("§", "Noch keine Umsätze", "Lade in Bankkonten einen Kontoauszug (PDF) hoch – die kategorisierten Buchungen erscheinen hier.", "");
@@ -584,6 +586,22 @@
     }).join("");
     const list = '<div class="panel"><div class="panel-head"><h3 class="panel-title">Buchungen (' + txns.length + ')</h3></div><div style="overflow-x:auto"><table class="ptable"><thead><tr><th class="num">Datum</th><th>Empfänger</th><th class="num">Betrag</th><th>Kategorie</th></tr></thead><tbody>' + listRows + "</tbody></table></div></div>";
     return head("Bankkonten", "Umsätze / Auswertung", right) + summary + list;
+  }
+  function openKatManager() {
+    const kats = Store.getTxKategorien();
+    const list = kats.length
+      ? kats.map(function (k) { return '<div class="kat-item"><span>' + esc(k) + '</span><button class="icon-btn" data-action="delete-kat" data-kat="' + esc(k) + '" title="Löschen">✕</button></div>'; }).join("")
+      : '<p class="muted">Noch keine Kategorien.</p>';
+    openModal(
+      '<div class="modal-head"><h3>Kategorien verwalten</h3><button class="icon-btn" data-action="close-modal">✕</button></div>' +
+      '<div class="modal-body">' +
+      '<form id="katForm" class="note-add" style="margin-bottom:14px"><input id="f_katname" type="text" placeholder="Neue Kategorie…" autocomplete="off" required><div><button type="submit" class="btn btn-primary btn-sm">＋ Hinzufügen</button></div></form>' +
+      '<div class="kat-list">' + list + "</div>" +
+      '<p class="panel-note" style="margin-top:12px">Kategorien erscheinen in den Zuordnungs-Dropdowns. Beim Löschen bleiben bereits zugeordnete Buchungen unverändert.</p>' +
+      '</div><div class="modal-foot"><span class="spacer"></span><button type="button" class="btn btn-primary" data-action="close-modal">Fertig</button></div>'
+    );
+    el("modal").dataset.form = "kat";
+    const f = el("f_katname"); if (f) f.focus();
   }
 
   /* ================= PORTFOLIO-ANSICHT (Wertpapiere) ================= */
@@ -1206,7 +1224,7 @@
       '<button class="btn btn-danger" data-action="clear-all">Alles löschen</button></div></div>' +
 
       '<div class="panel"><div class="panel-head"><h3 class="panel-title">Über</h3></div>' +
-      '<p class="panel-note">Carlos · Personal ERP – Version 4.8. Vermögenscockpit mit Login &amp; Cloud-Sync (Supabase, RLS).<br>' +
+      '<p class="panel-note">Carlos · Personal ERP – Version 4.9. Vermögenscockpit mit Login &amp; Cloud-Sync (Supabase, RLS).<br>' +
       "Geplant: automatische Bankanbindung, Live-Kurse, Dokumenten-Upload &amp; -Suche (RAG) für den Chatbot.</p></div>";
   }
 
@@ -1789,6 +1807,8 @@
       case "tx-back": ui.showTx = false; render(); break;
       case "review-cancel": ui.pendingImport = null; render(); break;
       case "review-save": saveReview(); break;
+      case "manage-kats": openKatManager(); break;
+      case "delete-kat": if (confirm("Kategorie löschen?")) { Store.deleteTxKategorie(target.dataset.kat); render(); openKatManager(); } break;
       case "pnl-year": ui.pnlJahr = Number(target.dataset.jahr); render(); break;
       case "pnl-file": if (el("f_pnlfile")) el("f_pnlfile").click(); break;
       case "edit-pnl-month": openPnlMonthForm(target.dataset.stream, Number(target.dataset.jahr), Number(target.dataset.monat)); break;
@@ -1818,6 +1838,7 @@
     else if (e.target.id === "sachkontoForm") { e.preventDefault(); submitSachkontoForm(); }
     else if (e.target.id === "pnlImportForm") { e.preventDefault(); submitPnlImport(); }
     else if (e.target.id === "pnlMonthForm") { e.preventDefault(); submitPnlMonthForm(); }
+    else if (e.target.id === "katForm") { e.preventDefault(); const n = (el("f_katname").value || "").trim(); if (n) { Store.addTxKategorie(n); render(); openKatManager(); } }
     else if (e.target.id === "noteForm") { e.preventDefault(); const t = el("f_note").value.trim(); if (t) { Store.addPartnerNote(ui.partnerId, t); render(); } }
     else if (e.target.id === "chatForm") { e.preventDefault(); const i = el("chatInput"); sendChat(i.value); }
   }

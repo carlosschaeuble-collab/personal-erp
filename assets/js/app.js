@@ -414,9 +414,9 @@
     const eyebrow = Store.BEREICHE[bereich].label;
     const right = '<div class="btn-row">' +
       '<button class="btn btn-primary" data-action="add-asset" data-bereich="' + bereich + '" data-kat="bank">＋ Konto</button>' +
-      '<button class="btn" data-action="upload-statement">⬆︎ Kontoauszug (PDF)</button>' +
+      '<button class="btn" data-action="upload-statement">⬆︎ Kontoauszug (CSV)</button>' +
       '<button class="btn btn-ghost" data-action="show-tx">Umsätze</button>' +
-      '<input type="file" id="stmtFile" accept="application/pdf,.pdf" class="hidden"></div>';
+      '<input type="file" id="stmtFile" accept=".csv,text/csv,application/pdf,.pdf" class="hidden"></div>';
     const accounts = Store.getAssets({ bereich: bereich, kategorie: "bank" }).sort(function (a, b) { return Store.computeValue(b) - Store.computeValue(a); });
     if (!accounts.length) {
       return head(eyebrow, meta.label, right) +
@@ -502,15 +502,76 @@
     if (t.n26kat && kategorien.indexOf(t.n26kat) >= 0) return { kat: t.n26kat, quelle: "n26" };
     return { kat: "", quelle: "" };
   }
+  /* ---- CSV-Parser (bankunabhängig, Spalten-Erkennung) ---- */
+  function parseCsvRows(text, delim) {
+    const rows = []; let row = [], field = "", inQ = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (inQ) { if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else inQ = false; } else field += c; }
+      else if (c === '"') inQ = true;
+      else if (c === delim) { row.push(field); field = ""; }
+      else if (c === "\r") { /* skip */ }
+      else if (c === "\n") { row.push(field); rows.push(row); row = []; field = ""; }
+      else field += c;
+    }
+    if (field.length || row.length) { row.push(field); rows.push(row); }
+    return rows;
+  }
+  function csvAmount(s) {
+    s = String(s).replace(/[^\d.,-]/g, ""); if (!s) return 0;
+    const lc = s.lastIndexOf(","), ld = s.lastIndexOf(".");
+    if (lc >= 0 && ld >= 0) { if (lc > ld) s = s.replace(/\./g, "").replace(",", "."); else s = s.replace(/,/g, ""); }
+    else if (lc >= 0) { if (/,\d{1,2}$/.test(s)) s = s.replace(",", "."); else s = s.replace(/,/g, ""); }
+    return Number(s) || 0;
+  }
+  function csvDate(s) {
+    s = String(s).trim();
+    let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return { iso: m[1] + "-" + m[2] + "-" + m[3], str: m[3] + "." + m[2] + "." + m[1] };
+    m = s.match(/^(\d{2})\.(\d{2})\.(\d{4})/); if (m) return { iso: m[3] + "-" + m[2] + "-" + m[1], str: m[1] + "." + m[2] + "." + m[3] };
+    return { iso: s, str: s };
+  }
+  function findCol(headers, res) {
+    for (let r = 0; r < res.length; r++) for (let i = 0; i < headers.length; i++) if (res[r].test(headers[i])) return i;
+    return -1;
+  }
+  function parseCsvStatement(text) {
+    if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1); // BOM
+    const nl = text.indexOf("\n"); const headLine = nl >= 0 ? text.slice(0, nl) : text;
+    const delim = (headLine.split(";").length > headLine.split(",").length) ? ";" : ",";
+    const rows = parseCsvRows(text, delim);
+    if (rows.length < 2) return [];
+    const headers = rows[0].map(function (h) { return String(h).trim().toLowerCase(); });
+    const cDate = findCol(headers, [/buchung|booking/, /^datum/, /^date$/, /date/]);
+    const cAmt = findCol(headers, [/amount \(eur\)/, /betrag/, /^amount$/, /amount/, /wert/]);
+    const cPayee = findCol(headers, [/partner name/, /empf/, /auftraggeber|beguenstig|zahlungsbeteiligter/, /name/]);
+    const cRef = findCol(headers, [/payment reference/, /verwendung/, /reference/, /zweck|beschreibung/]);
+    const cIban = findCol(headers, [/partner iban/, /iban/]);
+    const cType = findCol(headers, [/^type$/, /buchungstext|umsatzart|transaktionstyp/]);
+    if (cDate < 0 || cAmt < 0) return [];
+    const txns = [];
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i]; if (!r || r.length < 2) continue;
+      const amtRaw = r[cAmt]; if (amtRaw === undefined || String(amtRaw).trim() === "") continue;
+      const d = csvDate(r[cDate] || "");
+      const empf = String((cPayee >= 0 ? r[cPayee] : "") || "").trim();
+      const ref = [];
+      if (cRef >= 0 && r[cRef]) ref.push(String(r[cRef]).trim());
+      if (cIban >= 0 && r[cIban]) ref.push("IBAN: " + String(r[cIban]).trim());
+      if (!empf && !ref.length) continue;
+      txns.push({ datum: d.iso, datumStr: d.str, empfaenger: empf, betrag: csvAmount(amtRaw), n26kat: null, typ: (cType >= 0 ? String(r[cType] || "").trim() : ""), ref: ref });
+    }
+    return txns;
+  }
   async function handleStatementFile(file) {
     if (!file) return;
     const vc = el("viewContainer");
-    if (vc) vc.innerHTML = '<div class="panel"><p style="padding:24px;font-size:15px">📄 Lese Kontoauszug „' + esc(file.name) + '" … (das kann ein paar Sekunden dauern)</p></div>';
+    const isCsv = /\.csv$/i.test(file.name) || file.type === "text/csv";
+    if (vc) vc.innerHTML = '<div class="panel"><p style="padding:24px;font-size:15px">📄 Lese Kontoauszug „' + esc(file.name) + '" …</p></div>';
     try {
-      const buf = await file.arrayBuffer();
-      const lines = await pdfToLines(buf);
-      const txns = parseN26(lines);
-      if (!txns.length) { alert("Keine Buchungen erkannt. Aktuell wird das N26-PDF-Format unterstützt."); render(); return; }
+      let txns;
+      if (isCsv) { txns = parseCsvStatement(await file.text()); }
+      else { const buf = await file.arrayBuffer(); txns = parseN26(await pdfToLines(buf)); }
+      if (!txns.length) { alert("Keine Buchungen erkannt. Unterstützt: N26-CSV (empfohlen) oder N26-PDF."); render(); return; }
       const regeln = Store.getTxRegeln(), kats = Store.getTxKategorien();
       txns.forEach(function (t) { const c = categorizeTx(t, regeln, kats); t.kategorie = c.kat; t.quelle = c.quelle; t.manual = false; });
       ui.pendingImport = { dateiname: file.name, konto: "N26", txns: txns };
@@ -553,28 +614,29 @@
   }
   function saveReview() {
     const imp = ui.pendingImport; if (!imp) return;
-    const existing = {};
-    Store.getTransaktionen().forEach(function (t) { existing[t.datum + "|" + t.betrag + "|" + t.empfaenger] = true; });
+    // Duplikat-Schutz als Multiset: nur so oft überspringen, wie ein identischer Eintrag bereits gespeichert ist
+    // (verhindert Doppel-Import ganzer Auszüge, behält aber echte gleiche Buchungen im selben Auszug).
+    const counts = {};
+    Store.getTransaktionen().forEach(function (t) { const k = t.datum + "|" + t.betrag + "|" + t.empfaenger; counts[k] = (counts[k] || 0) + 1; });
     const now = new Date().toISOString();
     const toSave = []; let dup = 0;
     imp.txns.forEach(function (t, i) {
       if (t.manual && t.kategorie) Store.setTxRegel(t.empfaenger.toLowerCase(), t.kategorie);
       const key = t.datum + "|" + t.betrag + "|" + t.empfaenger;
-      if (existing[key]) { dup++; return; }
-      existing[key] = true;
+      if (counts[key] > 0) { counts[key]--; dup++; return; }
       toSave.push({ id: "tx_" + Date.now().toString(36) + "_" + i, konto: imp.konto, datum: t.datum, datumStr: t.datumStr, empfaenger: t.empfaenger, betrag: t.betrag, kategorie: t.kategorie || "", n26kat: t.n26kat || "", typ: t.typ || "", ref: t.ref || [], quelle: t.quelle || "", importedAt: now });
     });
     Store.addTransaktionen(toSave);
     ui.pendingImport = null; ui.showTx = true;
     render();
-    if (dup) setTimeout(function () { alert(toSave.length + " Buchungen übernommen · " + dup + " Duplikate übersprungen (bereits importiert)."); }, 60);
+    if (dup) setTimeout(function () { alert(toSave.length + " Buchungen übernommen · " + dup + " bereits vorhanden (übersprungen)."); }, 60);
   }
   function transaktionenHtml() {
     const txns = Store.getTransaktionen().slice().sort(function (a, b) { return a.datum < b.datum ? 1 : (a.datum > b.datum ? -1 : 0); });
-    const right = '<div class="btn-row"><button class="btn" data-action="upload-statement">⬆︎ Kontoauszug (PDF)</button>' +
+    const right = '<div class="btn-row"><button class="btn" data-action="upload-statement">⬆︎ Kontoauszug (CSV)</button>' +
       '<button class="btn" data-action="manage-kats">⚙︎ Kategorien</button>' +
       '<button class="btn btn-ghost" data-action="tx-back">← Zurück</button>' +
-      '<input type="file" id="stmtFile" accept="application/pdf,.pdf" class="hidden"></div>';
+      '<input type="file" id="stmtFile" accept=".csv,text/csv,application/pdf,.pdf" class="hidden"></div>';
     if (!txns.length) return head("Bankkonten", "Umsätze", right) + emptyState("§", "Noch keine Umsätze", "Lade in Bankkonten einen Kontoauszug (PDF) hoch – die kategorisierten Buchungen erscheinen hier.", "");
     const byKat = {}; txns.forEach(function (t) { const k = t.kategorie || "(unklar)"; byKat[k] = (byKat[k] || 0) + t.betrag; });
     const katRows = Object.keys(byKat).sort(function (a, b) { return byKat[a] - byKat[b]; }).map(function (k) { return row(esc(k), fmtEur(byKat[k]), byKat[k] < 0 ? "neg" : "pos"); }).join("");
@@ -1251,7 +1313,7 @@
       '<button class="btn btn-danger" data-action="clear-all">Alles löschen</button></div></div>' +
 
       '<div class="panel"><div class="panel-head"><h3 class="panel-title">Über</h3></div>' +
-      '<p class="panel-note">Carlos · Personal ERP – Version 5.0. Vermögenscockpit mit Login &amp; Cloud-Sync (Supabase, RLS).<br>' +
+      '<p class="panel-note">Carlos · Personal ERP – Version 5.1. Vermögenscockpit mit Login &amp; Cloud-Sync (Supabase, RLS).<br>' +
       "Geplant: automatische Bankanbindung, Live-Kurse, Dokumenten-Upload &amp; -Suche (RAG) für den Chatbot.</p></div>";
   }
 
@@ -1884,7 +1946,14 @@
     if (e.target.id === "assetDocInput" && e.target.files && e.target.files.length) { handleAssetDocs(e.target.files); e.target.value = ""; }
     if (e.target.id === "f_pnlfile" && e.target.files && e.target.files[0]) { const r = new FileReader(); r.onload = function () { if (el("f_pnljson")) el("f_pnljson").value = String(r.result); }; r.readAsText(e.target.files[0]); e.target.value = ""; }
     if (e.target.id === "stmtFile" && e.target.files && e.target.files[0]) { handleStatementFile(e.target.files[0]); e.target.value = ""; }
-    if (e.target.classList && e.target.classList.contains("tx-cat") && ui.pendingImport) { const i = Number(e.target.dataset.idx); const t = ui.pendingImport.txns[i]; if (t) { t.kategorie = e.target.value; t.manual = true; t.quelle = e.target.value ? "manuell" : ""; } }
+    if (e.target.classList && e.target.classList.contains("tx-cat") && ui.pendingImport) {
+      const i = Number(e.target.dataset.idx), t = ui.pendingImport.txns[i];
+      if (t) {
+        const v = e.target.value; t.kategorie = v; t.manual = true; t.quelle = v ? "manuell" : "";
+        if (v) ui.pendingImport.txns.forEach(function (o) { if (o !== t && !o.manual && o.empfaenger === t.empfaenger) { o.kategorie = v; o.quelle = "manuell"; } });
+        render();
+      }
+    }
   }
   function onKey(e) {
     if (e.key === "Escape" && !el("modalOverlay").classList.contains("hidden")) closeModal();

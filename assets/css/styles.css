@@ -204,6 +204,10 @@ h1, h2, h3 { font-family: var(--sans); }
 .tx-cat { max-width: 200px; }
 .kat-list { display: flex; flex-direction: column; }
 .kat-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 2px; border-bottom: 1px solid var(--line-soft); font-size: 14px; }
+.mandant-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 0 8px; }
+.mandant-ind { font-size: 12px; font-weight: 700; color: var(--accent-strong); }
+.mandant-switch { font-size: 12px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text); }
+body.local-mode .mandant-bar { display: none; }
 .pnl-mbtn { background: none; border: 0; font: inherit; font-weight: 600; color: var(--text-2); cursor: pointer; padding: 3px 7px; border-radius: 6px; }
 .pnl-mbtn:hover { background: var(--accent-soft); color: var(--accent-strong); }
 .pnl-preview { margin-top: 14px; padding: 12px 15px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; }

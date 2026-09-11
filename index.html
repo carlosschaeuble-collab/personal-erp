@@ -6,7 +6,7 @@
   <title>Carlos – Personal ERP</title>
   <meta name="description" content="Carlos – persönliches Vermögens-ERP, Privat & Business. Mit Login & Cloud-Sync (Supabase).">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230070f2'/><circle cx='16' cy='12' r='5' fill='white'/><path d='M6.5 26.5c0-5 4.3-7.5 9.5-7.5s9.5 2.5 9.5 7.5z' fill='white'/></svg>">
-  <link rel="stylesheet" href="assets/css/styles.css?v=5.2">
+  <link rel="stylesheet" href="assets/css/styles.css?v=5.3">
 </head>
 <body>
   <!-- ============ Login ============ -->
@@ -26,6 +26,7 @@
         <p class="auth-lead">Melde dich an, um auf dein Personal ERP zuzugreifen.</p>
         <div class="form-row"><label for="authEmail">E-Mail</label><input id="authEmail" type="email" required autocomplete="username" placeholder="du@example.com"></div>
         <div class="form-row"><label for="authPassword">Passwort</label><input id="authPassword" type="password" required minlength="6" autocomplete="current-password" placeholder="••••••••"></div>
+        <div class="form-row"><label for="authMandant">Mandant</label><select id="authMandant"><option value="100">100 · Privat</option><option value="200">200 · Business</option></select></div>
         <p class="auth-error" id="authError"></p>
         <p class="auth-info" id="authInfo"></p>
         <button type="submit" class="btn btn-primary auth-submit" id="authSubmit">Anmelden</button>
@@ -53,6 +54,10 @@
         <button class="nav-leaf" data-action="nav" data-section="einstellungen">
           <span class="nav-ico" id="icoSettings"></span> Einstellungen
         </button>
+        <div class="mandant-bar">
+          <span class="mandant-ind" id="mandantIndicator"></span>
+          <select class="mandant-switch" id="mandantSwitch" title="Mandant wechseln"><option value="100">100 · Privat</option><option value="200">200 · Business</option></select>
+        </div>
         <div class="user-bar">
           <span class="user-email" id="userEmail"></span>
           <button class="user-logout" data-auth="logout" title="Abmelden">Abmelden</button>
@@ -77,11 +82,11 @@
     <div class="modal" id="modal" role="dialog" aria-modal="true"></div>
   </div>
 
-  <script src="assets/js/config.js?v=5.2"></script>
+  <script src="assets/js/config.js?v=5.3"></script>
   <script src="assets/vendor/supabase.js"></script>
-  <script src="assets/js/store.js?v=5.2"></script>
-  <script src="assets/js/charts.js?v=5.2"></script>
-  <script src="assets/js/app.js?v=5.2"></script>
-  <script src="assets/js/auth.js?v=5.2"></script>
+  <script src="assets/js/store.js?v=5.3"></script>
+  <script src="assets/js/charts.js?v=5.3"></script>
+  <script src="assets/js/app.js?v=5.3"></script>
+  <script src="assets/js/auth.js?v=5.3"></script>
 </body>
 </html>

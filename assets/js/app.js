@@ -72,6 +72,12 @@
     { section: "termine", label: "Termine", icon: "termine" }
   ];
 
+  /* ---- Mandanten-Navigation: 100 zeigt Privat, 200 zeigt Business (je + Übersicht + Zentrale Daten) ---- */
+  const MANDANT_NAV = { "100": ["uebersicht", "zentrale", "privat"], "200": ["uebersicht", "zentrale", "geschaeftlich"] };
+  function currentMandant() { try { const m = localStorage.getItem("erp_mandant"); return (m === "200") ? "200" : "100"; } catch (e) { return "100"; } }
+  function mandantScope() { return currentMandant() === "200" ? "geschaeftlich" : "privat"; }
+  function mandantSections() { return MANDANT_NAV[currentMandant()] || MANDANT_NAV["100"]; }
+
   const ui = { section: "uebersicht", kat: null, stream: null, partnerId: null, kontenplanId: null, pnlJahr: null, pendingImport: null, showTx: false, filter: "alles", expanded: { zentrale: true, privat: true, geschaeftlich: true, investments: true, stream1: true, stream2: true }, chat: [] };
   let assetDocs = []; // Arbeitskopie der Dokumente im geöffneten Asset-Formular
 
@@ -235,7 +241,8 @@
 
   function segmented() {
     function b(v, l) { return '<button data-action="filter" data-filter="' + v + '"' + (ui.filter === v ? ' class="active"' : "") + ">" + l + "</button>"; }
-    return '<div class="segmented">' + b("alles", "Alles") + b("privat", "Privat") + b("geschaeftlich", "Business") + "</div>";
+    // Pro Mandant nur der eigene Bereich (100 = Privat, 200 = Business)
+    return '<div class="segmented">' + (mandantScope() === "privat" ? b("privat", "Privat") : b("geschaeftlich", "Business")) + "</div>";
   }
 
   function emptyState(mark, title, text, actions) {
@@ -245,6 +252,7 @@
 
   /* ================= ÜBERSICHT ================= */
   function uebersichtHtml() {
+    ui.filter = mandantScope();               // Mandant begrenzt die Übersicht auf seinen Bereich
     const t = Store.totals(ui.filter);
     const snaps = Store.getSnapshots();
 
@@ -1316,7 +1324,7 @@
       '<button class="btn btn-danger" data-action="clear-all">Alles löschen</button></div></div>' +
 
       '<div class="panel"><div class="panel-head"><h3 class="panel-title">Über</h3></div>' +
-      '<p class="panel-note">Carlos · Personal ERP – Version 5.3. Vermögenscockpit mit Login &amp; Cloud-Sync (Supabase, RLS).<br>' +
+      '<p class="panel-note">Carlos · Personal ERP – Version 5.4. Vermögenscockpit mit Login &amp; Cloud-Sync (Supabase, RLS).<br>' +
       "Geplant: automatische Bankanbindung, Live-Kurse, Dokumenten-Upload &amp; -Suche (RAG) für den Chatbot.</p></div>";
   }
 
@@ -1737,7 +1745,8 @@
 
   /* ================= Rendern ================= */
   function renderNav() {
-    const html = NAV.map(function (item) {
+    const allowed = mandantSections();
+    const html = NAV.filter(function (item) { return allowed.indexOf(item.section) >= 0; }).map(function (item) {
       const activeParent = ui.section === item.section && !ui.kat;
       const ico = '<span class="nav-ico">' + icon(item.icon) + "</span>";
       if (!item.children) {
@@ -1814,6 +1823,8 @@
   }
 
   function render() {
+    const _allowed = mandantSections();
+    if (ui.section !== "einstellungen" && _allowed.indexOf(ui.section) < 0) { ui.section = "uebersicht"; ui.kat = null; ui.partnerId = null; ui.kontenplanId = null; }
     renderNav();
     el("topbarTitle").textContent = currentTitle();
     el("viewContainer").innerHTML = viewHtml();

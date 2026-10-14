@@ -302,6 +302,7 @@ var ERP_CFG={
       +newsItem("Börse","EZB-Sitzung: Markt erwartet unveränderte Zinsen")
       +newsItem("ARD","Tagesschau: Aktuelle Nachrichten (Platzhalter)")
       +'</div><p class="muted" style="font-size:12px;margin:8px 2px 0">Live-Feed (Börsennews + ARD) wird in einem späteren Schritt angebunden.</p></div></div>';
+    h+='<div class="panel"><div style="padding:14px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap"><div style="flex:1;min-width:220px"><div style="font-weight:500;font-size:14px;margin-bottom:3px">🎨 Google-Sheet übersichtlich formatieren</div><div class="muted" style="font-size:12.5px">Kopfzeilen hervorheben &amp; fixieren, Spaltenbreiten anpassen, Buchungskreis-Dropdowns anlegen — damit klar ist, wo was eingetragen wird. Formatiert dein Sheet direkt im Drive.</div></div><button class="editbtn" data-fmt="1">✨ Jetzt formatieren</button></div></div>';
     return h;
   }
   function tile(k,v,d,big){ return '<div class="tile'+(big?' big':'')+'"><p class="k">'+esc(k)+'</p><div class="v">'+v+'</div>'+(d?'<div class="d'+(/-/.test(v)?' neg':'')+'">'+esc(d)+'</div>':'')+'</div>'; }
@@ -485,6 +486,7 @@ var ERP_CFG={
     p.innerHTML=noteHTML(code);
   }
   document.getElementById("page").addEventListener("click",function(e){
+    var fm=e.target.closest("[data-fmt]"); if(fm){ if(window.ERP_format){ window.ERP_format(); } else { toast("Bitte neu anmelden, dann erneut.",true); } return; }
     var ed=e.target.closest("[data-edit]"); if(ed){ var ec=ed.dataset.edit; if(editState[ec]){ editState[ec]=false; if(window.__SHEETS){ boot(parseSheets(window.__SHEETS),ec); } else { render(); } } else { editState[ec]=true; render(); } return; }
     var s=e.target.closest("[data-sort]"); if(s){ var col=+s.dataset.sort; var ss=sortState[cur]; sortState[cur]=(ss&&ss.col===col)?{col:col,dir:-ss.dir}:{col:col,dir:1}; render(); return; }
     var o=e.target.closest("[data-obj]"); if(o){ var pp=o.dataset.obj.split(":"); goObj(pp[0],+pp[1]); return; }
@@ -504,7 +506,7 @@ var ERP_CFG={
     byCode={}; nav.forEach(function(t){byCode[t.code]=t;(t.children||[]).forEach(function(ch){byCode[ch.code]=ch;});});
     sortState={}; buildTabs(); go(keepTab||"A");
   }
-  window.ERP={boot:boot};
+  window.ERP={boot:boot,toast:toast};
 })();
 </script>
 <script>
@@ -608,6 +610,31 @@ function parseSheets(S){
   window.ERP_write=function(a1,value){
     var url="https://sheets.googleapis.com/v4/spreadsheets/"+ERP_CFG.SPREADSHEET_ID+"/values/"+encodeURIComponent(a1)+"?valueInputOption=USER_ENTERED";
     return fetch(url,{method:"PUT",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({values:[[value]]})}).then(function(r){ return r.text().then(function(t){ if(!r.ok) throw new Error("HTTP "+r.status+": "+t.slice(0,160)); return JSON.parse(t); }); });
+  };
+  window.ERP_format=function(){
+    var tt=(window.ERP&&window.ERP.toast)||function(){};
+    if(!token){ tt("Bitte zuerst anmelden.",true); return; }
+    tt("Formatiere dein Google-Sheet…");
+    var base="https://sheets.googleapis.com/v4/spreadsheets/"+ERP_CFG.SPREADSHEET_ID;
+    fetch(base+"?fields=sheets.properties(sheetId,title,gridProperties)",{headers:{Authorization:"Bearer "+token}}).then(function(r){return r.json();}).then(function(meta){
+      var by={}; (meta.sheets||[]).forEach(function(s){by[s.properties.title]=s.properties;});
+      var cfg={'B1':2,'B2':2,'B3':1,'C1':3,'D1':3,'F':0,'G':0,'H1.2':3,'H1.3':4,'H2.1':2,'H2.2':2,'H2.3':2,'H2.4':2,'H3.1':2,'H3.2':2,'H3.3':2,'H3.4':2,'I1':2,'I2':2,'E1':2,'E2':2,'E3':2,'E4':2,'E5':2};
+      var extra={'I1':[12,19]};
+      var bkrCol={'F':4,'G':7,'B3':2,'H2.1':10,'H3.1':11,'I2':4};
+      var bkrList=['1000','1010','1020','2010','2020','2030'].map(function(v){return {userEnteredValue:v};});
+      var BLUE={red:0,green:0.439,blue:0.949}, WHITE={red:1,green:1,blue:1};
+      function hdr(sid,row){ return {repeatCell:{range:{sheetId:sid,startRowIndex:row,endRowIndex:row+1},cell:{userEnteredFormat:{backgroundColor:BLUE,textFormat:{bold:true,foregroundColor:WHITE},verticalAlignment:"MIDDLE"}},fields:"userEnteredFormat(backgroundColor,textFormat,verticalAlignment)"}}; }
+      var reqs=[];
+      Object.keys(cfg).forEach(function(t){ var p=by[t]; if(!p)return; var sid=p.sheetId, hr=cfg[t], cols=(p.gridProperties&&p.gridProperties.columnCount)||12;
+        reqs.push(hdr(sid,hr));
+        (extra[t]||[]).forEach(function(er){ reqs.push(hdr(sid,er)); });
+        reqs.push({updateSheetProperties:{properties:{sheetId:sid,gridProperties:{frozenRowCount:hr+1}},fields:"gridProperties.frozenRowCount"}});
+        reqs.push({autoResizeDimensions:{dimensions:{sheetId:sid,dimension:"COLUMNS",startIndex:0,endIndex:cols}}});
+        reqs.push({repeatCell:{range:{sheetId:sid,startRowIndex:0,endRowIndex:1,startColumnIndex:0,endColumnIndex:1},cell:{userEnteredFormat:{textFormat:{bold:true,fontSize:13}}},fields:"userEnteredFormat.textFormat"}});
+        if(bkrCol[t]!=null){ reqs.push({setDataValidation:{range:{sheetId:sid,startRowIndex:hr+1,startColumnIndex:bkrCol[t],endColumnIndex:bkrCol[t]+1},rule:{condition:{type:"ONE_OF_LIST",values:bkrList},showCustomUi:true,strict:false}}}); }
+      });
+      return fetch(base+":batchUpdate",{method:"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({requests:reqs})}).then(function(r){ return r.text().then(function(x){ if(!r.ok) throw new Error("HTTP "+r.status+": "+x.slice(0,180)); return x; }); });
+    }).then(function(){ tt("✓ Google-Sheet formatiert — schau's dir im Drive an!"); }).catch(function(e){ tt("✗ Fehler: "+(e.message||e),true); });
   };
   function status(msg,err){ var el=$("loginStatus"); if(el){ el.textContent=msg||""; el.className="login-status"+(err?" err":""); } }
   function whenGis(cb){ if(window.google&&google.accounts&&google.accounts.oauth2){cb();} else setTimeout(function(){whenGis(cb);},60); }

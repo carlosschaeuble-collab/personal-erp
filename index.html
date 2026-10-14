@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Don Carlos · Personal ERP</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 170 95'><defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='%2317b1ee'/><stop offset='1' stop-color='%230d72ba'/></linearGradient></defs><rect width='170' height='95' rx='14' fill='url(%23g)'/><polygon points='170,38 170,95 97,95' fill='white'/><text x='12' y='71' font-family='Arial' font-weight='800' font-size='82' fill='white' textLength='146' lengthAdjust='spacingAndGlyphs'>CSE</text></svg>">
+<link rel="icon" href="cse-logo.png">
 <style>
 :root{
   --shell:#354a5f;--shell-ink:#eaf0f5;--shell-line:#46586a;
@@ -24,8 +24,8 @@ body{font-family:var(--font);color:var(--ink);-webkit-font-smoothing:antialiased
 .brand{display:flex;align-items:center;gap:9px}
 .brand .mk{width:26px;height:26px;border-radius:6px;background:var(--accent);display:flex;align-items:center;justify-content:center}
 .brand b{font-weight:500;font-size:14px}.brand span{font-size:12px;color:#b9c6d2;margin-left:2px}
-.brand .cse{height:27px;width:auto;display:block;border-radius:5px;margin-right:3px}
-.login-card .cse{height:48px;width:auto;border-radius:9px}
+.brand .cse{height:26px;width:auto;display:block;margin-right:4px}
+.login-card .cse{height:44px;width:auto;margin-bottom:2px}
 .shell .search{margin:0 auto;display:flex;align-items:center;gap:8px;background:#ffffff14;border:1px solid var(--shell-line);border-radius:6px;padding:0 10px;height:30px;width:min(340px,34vw);color:#c7d2dc}
 .shell .search input{border:0;background:transparent;color:var(--shell-ink);font:inherit;font-size:13px;width:100%;outline:none}
 .shell .search input::placeholder{color:#9fb0bf}
@@ -170,7 +170,7 @@ table.alv input.cell-edit:disabled{opacity:.5}
 <div class="login" id="login">
   <div class="login-card">
     <div class="lbrand">
-      <svg class="cse" viewBox="0 0 170 95" xmlns="http://www.w3.org/2000/svg" aria-label="CSE"><defs><linearGradient id="cseg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#17b1ee"/><stop offset="1" stop-color="#0d72ba"/></linearGradient></defs><rect width="170" height="95" rx="9" fill="url(#cseg2)"/><polygon points="170,38 170,95 97,95" fill="#fff"/><text x="12" y="71" font-family="Arial,Helvetica,sans-serif" font-weight="800" font-size="82" fill="#fff" textLength="146" lengthAdjust="spacingAndGlyphs">CSE</text></svg>
+      <img class="cse" src="cse-logo.png" alt="CSE">
       <div><h1>Don Carlos · Personal ERP</h1><div class="sub">Dein Finanz-Cockpit</div></div>
     </div>
     <p>Melde dich mit Google an. Deine Daten bleiben in <b>deinem eigenen Google Drive</b> — die App liest sie nur mit deiner Erlaubnis.</p>
@@ -186,7 +186,7 @@ table.alv input.cell-edit:disabled{opacity:.5}
 <div class="app" id="app" hidden>
   <header class="shell sticky" style="z-index:50">
     <div class="brand">
-      <svg class="cse" viewBox="0 0 170 95" xmlns="http://www.w3.org/2000/svg" aria-label="CSE"><defs><linearGradient id="cseg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#17b1ee"/><stop offset="1" stop-color="#0d72ba"/></linearGradient></defs><rect width="170" height="95" rx="7" fill="url(#cseg)"/><polygon points="170,38 170,95 97,95" fill="#fff"/><text x="12" y="71" font-family="Arial,Helvetica,sans-serif" font-weight="800" font-size="82" fill="#fff" textLength="146" lengthAdjust="spacingAndGlyphs">CSE</text></svg>
+      <img class="cse" src="cse-logo.png" alt="CSE">
       <b>Don Carlos</b><span>Personal ERP</span>
     </div>
     <label class="search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input placeholder="Suchen…" aria-label="Suchen"></label>

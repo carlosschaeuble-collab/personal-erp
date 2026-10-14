@@ -89,6 +89,8 @@ table.alv tfoot td{background:#f3f5f6;border-top:1px solid var(--line-strong);fo
 .pnl td:last-child{text-align:right;font-variant-numeric:tabular-nums}
 .pnl tr.tot td{font-weight:500;border-top:1px solid var(--line-strong);background:#f3f5f6}
 .note-card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px 20px;max-width:720px}
+.cg-meta{display:flex;flex-wrap:wrap;gap:6px 20px;margin:0 0 16px;font-size:12.5px;color:var(--ink-2)}
+.cg-meta b{color:var(--ink);font-weight:600}
 .note-card .vp{display:inline-block;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--crit);background:#fef3e8;border:1px solid #f3cda6;border-radius:999px;padding:2px 9px;margin-bottom:10px}
 .note-card p{font-size:14px;color:var(--ink-2);line-height:1.6;margin:.3em 0}
 .calc{display:grid;grid-template-columns:1fr 1fr;gap:16px}
@@ -441,6 +443,41 @@ var ERP_CFG={
       h+='<div class="r'+(hl?' hl':'')+'"><div>'+esc(p[0])+'</div><div>'+val+'</div></div>'; });
     h+='</div></div>'; return h;
   }
+  var CG_MONTHS={januar:1,februar:2,"märz":3,april:4,mai:5,juni:6,juli:7,august:8,september:9,oktober:10,november:11,dezember:12};
+  function cgNum(x){ if(x==null||x==="")return 0; if(typeof x==="number")return x; var s=String(x).replace(/[\s€]/g,""); if(/,/.test(s)&&/\.\d{3}(\D|$)/.test(s)) s=s.replace(/\./g,""); s=s.replace(",","."); var n=parseFloat(s); return isNaN(n)?0:n; }
+  function cgIdx(cols){ function f(re){ for(var i=0;i<cols.length;i++){ if(re.test(String(cols[i]||"")))return i; } return -1; }
+    return {monat:f(/^\s*Monat/i),jahr:f(/^\s*Jahr/i),airbnb:f(/Airbnb\s*netto/i),cg:f(/Costa\s*Golf/i),netto:f(/Ingreso\s*netto/i),brutto:f(/Ingreso\s*brutto/i),fee:f(/Fee/i),hon:f(/Honorar/i),iva:f(/IVA/i)}; }
+  function costaGolfHTML(v){
+    var cols=v.cols||[], rows=v.rows||[], ix=cgIdx(cols);
+    var ms=rows.filter(function(r){ return ix.monat>=0 && CG_MONTHS[String(r[ix.monat]==null?"":r[ix.monat]).trim().toLowerCase()]; });
+    var T={airbnb:0,cg:0,netto:0,brutto:0,hon:0,iva:0,pay:0};
+    ms.forEach(function(r){ var ne=cgNum(r[ix.netto]),ho=cgNum(r[ix.hon]),iv=cgNum(r[ix.iva]); T.airbnb+=cgNum(r[ix.airbnb]); T.cg+=cgNum(r[ix.cg]); T.netto+=ne; T.brutto+=cgNum(r[ix.brutto]); T.hon+=ho; T.iva+=iv; T.pay+=ne-ho-iv; });
+    var h='<div class="crumb">Business › Marbella</div><div class="page-head"><h1>Marbella – Costa Golf</h1><span class="muted" style="font-size:12.5px;margin-left:4px">Monatsabrechnungen der Verwaltung</span><span style="flex:1"></span><button class="editbtn" data-edit="H1.1">✎ Bearbeiten</button></div>';
+    if(v.meta&&v.meta.length){ h+='<div class="cg-meta">'; v.meta.forEach(function(p){ h+='<span><b>'+esc(p[0])+':</b> '+esc(p[1])+'</span>'; }); h+='</div>'; }
+    h+='<section class="tiles">'
+      +tile("Einnahmen brutto",eur(T.brutto),ms.length+" Monate abgerechnet","big")
+      +tile("Einnahmen netto",eur(T.netto),"nach Plattform / Reinigung")
+      +tile("Honorar + IVA",eur(T.hon+T.iva),"Verwaltung Costa Golf")
+      +'<div class="tile"><p class="k">Netto-Auszahlung</p><div class="v" style="color:var(--pos)">'+eur(T.pay)+'</div><div class="d">an Eigentümer nach Honorar</div></div>'
+      +'</section>';
+    if(!ms.length){ h+='<div class="note-card"><p style="margin:0" class="muted">Noch keine Monatsabrechnungen hinterlegt. Über „✎ Bearbeiten" Zeilen ergänzen.</p></div>'; return h; }
+    var years={}; ms.forEach(function(r){ var y=String(r[ix.jahr]==null?"?":r[ix.jahr]).trim()||"?"; (years[y]=years[y]||[]).push(r); });
+    var cdef=["Monat","Airbnb (€)","Costa Golf (€)","Ingreso netto (€)","Ingreso brutto (€)","Fee %","Honorar (€)","IVA (€)","Auszahlung (€)"];
+    Object.keys(years).sort().forEach(function(y){
+      var list=years[y].slice().sort(function(a,b){ return (CG_MONTHS[String(a[ix.monat]).trim().toLowerCase()]||0)-(CG_MONTHS[String(b[ix.monat]).trim().toLowerCase()]||0); });
+      var s={airbnb:0,cg:0,netto:0,brutto:0,hon:0,iva:0,pay:0};
+      h+='<div class="panel"><div class="alv-bar"><h2>Jahr '+esc(y)+'</h2><span class="count">'+list.length+' Monate</span></div><div class="alv-wrap"><table class="alv"><thead><tr>';
+      cdef.forEach(function(c,i){ h+='<th class="'+(i?'num':'name')+'">'+esc(c)+'</th>'; }); h+='</tr></thead><tbody>';
+      list.forEach(function(r){ var ab=cgNum(r[ix.airbnb]),cg=cgNum(r[ix.cg]),ne=cgNum(r[ix.netto]),br=cgNum(r[ix.brutto]),fe=cgNum(r[ix.fee]),ho=cgNum(r[ix.hon]),iv=cgNum(r[ix.iva]),pa=ne-ho-iv;
+        s.airbnb+=ab;s.cg+=cg;s.netto+=ne;s.brutto+=br;s.hon+=ho;s.iva+=iv;s.pay+=pa;
+        var ft=fe?((fe<1?fe*100:fe).toLocaleString("de-DE",{maximumFractionDigits:1})+" %"):"–";
+        h+='<tr><td class="name">'+esc(r[ix.monat])+'</td><td class="num">'+(ab?eur(ab,2):'–')+'</td><td class="num">'+(cg?eur(cg,2):'–')+'</td><td class="num">'+eur(ne,2)+'</td><td class="num">'+eur(br,2)+'</td><td class="num">'+ft+'</td><td class="num">'+eur(ho,2)+'</td><td class="num">'+eur(iv,2)+'</td><td class="num" style="font-weight:600">'+eur(pa,2)+'</td></tr>';
+      });
+      h+='</tbody><tfoot><tr><td>Summe '+esc(y)+'</td><td class="num">'+eur(s.airbnb,2)+'</td><td class="num">'+eur(s.cg,2)+'</td><td class="num">'+eur(s.netto,2)+'</td><td class="num">'+eur(s.brutto,2)+'</td><td class="num"></td><td class="num">'+eur(s.hon,2)+'</td><td class="num">'+eur(s.iva,2)+'</td><td class="num">'+eur(s.pay,2)+'</td></tr></tfoot></table></div></div>';
+    });
+    if(v.note){ h+='<div class="note-card" style="max-width:none;margin-top:2px"><p style="margin:0;font-size:12.5px" class="muted">'+esc(v.note)+'</p></div>'; }
+    return h;
+  }
   function pnlHTML(v){
     var h=head(v.title,"Business");
     h+='<div class="panel" style="max-width:480px"><table class="pnl">';
@@ -603,7 +640,7 @@ var ERP_CFG={
     }
     var v=V[code];
     if(v){
-      if(v.kind==="grid"){ if(code==="B1"&&!editState["B1"]) p.innerHTML=partnersHTML(v,code); else if(code==="F"&&!editState["F"]) p.innerHTML=cashHTML(v,code); else if(code==="G"&&!editState["G"]) p.innerHTML=arapHTML(v,code); else p.innerHTML=gridHTML(v,code); }
+      if(v.kind==="grid"){ if(code==="B1"&&!editState["B1"]) p.innerHTML=partnersHTML(v,code); else if(code==="F"&&!editState["F"]) p.innerHTML=cashHTML(v,code); else if(code==="G"&&!editState["G"]) p.innerHTML=arapHTML(v,code); else if(code==="H1.1"&&v.costagolf&&!editState["H1.1"]) p.innerHTML=costaGolfHTML(v); else p.innerHTML=gridHTML(v,code); }
       else if(v.kind==="invest") p.innerHTML=investHTML(v);
       else if(v.kind==="guv") p.innerHTML=guvHTML(v);
       else if(v.kind==="keyvalue") p.innerHTML=keyvalueHTML(v);
@@ -701,9 +738,18 @@ function parseSheets(S){
     var tfee=fee+iva,ebit=ums-tfee-rep-neb-adj-son,est=round2(0.35*ebit);
     months.push({jahr:jahr?parseInt(jahr):null,monat:monat,sheetRow:r,tage:tage,umsatz:round2(ums),eur_nacht:tage?round2(ums/tage):0,fee:fee,iva:iva,tfee:round2(tfee),rep:rep,neb:neb,adj:adj,son:son,ebit:round2(ebit),est:est,gewinn:round2(ebit-est)}); }
   views['H1.3']={kind:"guv",title:"Marbella – GuV",months:months};
-  // Costa Golf keyvalue
-  var pairs=[]; for(r=3;r<maxRow('H1.1');r++){ var lab=cell('H1.1',r,1); if(lab==null)continue; var vv=cell('H1.1',r,2); var nv=num(vv); pairs.push([String(lab),nv!=null?nv:(vv!=null?String(vv):"")]); }
-  views['H1.1']={kind:"keyvalue",title:"Marbella – Costa Golf (Verwaltung)",pairs:pairs};
+  // Costa Golf – Monatsabrechnungen (Settlement-Tabelle; Fallback: altes Key/Value-Layout)
+  var hrCG=-1; for(r=0;r<maxRow('H1.1');r++){ if(String(cell('H1.1',r,0)||"").trim().toLowerCase()==="monat"){ hrCG=r; break; } }
+  if(hrCG<0){
+    var pairs=[]; for(r=3;r<maxRow('H1.1');r++){ var lab=cell('H1.1',r,1); if(lab==null)continue; var vv=cell('H1.1',r,2); var nv=num(vv); pairs.push([String(lab),nv!=null?nv:(vv!=null?String(vv):"")]); }
+    views['H1.1']={kind:"keyvalue",title:"Marbella – Costa Golf (Verwaltung)",pairs:pairs};
+  } else {
+    var eCG=extract('H1.1',hrCG);
+    gridview('H1.1','Marbella – Costa Golf',eCG.cols,eCG.rows,null,[2,3,4,5,6,7,8,9,10,12,13],{sheet:'H1.1',srcRows:eCG.srcRows,headerRow:eCG.headerRow,edit:"auto"});
+    var cgMeta=[]; for(r=1;r<hrCG;r++){ var ml=cell('H1.1',r,1), mv=cell('H1.1',r,2); if(ml!=null&&mv!=null) cgMeta.push([String(ml),String(mv)]); }
+    var cgNote=null; for(r=hrCG+1;r<maxRow('H1.1');r++){ var na=cell('H1.1',r,0); if(na&&/^\s*Quelle/i.test(String(na))){ cgNote=String(na); break; } }
+    views['H1.1'].meta=cgMeta; views['H1.1'].note=cgNote; views['H1.1'].costagolf=true;
+  }
   // immobilien overviews
   e=extract('H2.1',2); gridview('H2.1','OWL-Vermietung – Gebäude + Mieter',e.cols,e.rows,null,[5,6,7,8],{sheet:'H2.1',srcRows:e.srcRows,headerRow:e.headerRow,edit:"auto"});
   e=extract('H3.1',2); gridview('H3.1','Gewerbl. Vermietung – Gebäude + Mieter',e.cols,e.rows,null,[6,7,8,9],{sheet:'H3.1',srcRows:e.srcRows,headerRow:e.headerRow,edit:"auto"});
@@ -811,6 +857,8 @@ function parseSheets(S){
       status("Fehler beim Laden: "+(e.message||e),true);
     });
   }
+  /* Lokaler Test-Hook: nur mit ?dev=mock + geladenem mock_sheets.js (wird nie committed) */
+  if(/[?&]dev=mock/.test(location.search)&&window.MOCK_SHEETS){ try{ window.__SHEETS=window.MOCK_SHEETS; var dmock=parseSheets(window.MOCK_SHEETS); $("login").hidden=true; $("app").hidden=false; window.ERP.boot(dmock); }catch(ex){ status("Mock-Fehler: "+(ex.message||ex),true); } }
 })();
 </script>
 </body>

@@ -91,6 +91,11 @@ table.alv tfoot td{background:#f3f5f6;border-top:1px solid var(--line-strong);fo
 .note-card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px 20px;max-width:720px}
 .cg-meta{display:flex;flex-wrap:wrap;gap:6px 20px;margin:0 0 16px;font-size:12.5px;color:var(--ink-2)}
 .cg-meta b{color:var(--ink);font-weight:600}
+.seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:6px;overflow:hidden;vertical-align:middle}
+.seg-b{border:0;background:var(--surface);color:var(--ink-2);font:inherit;font-size:11.5px;line-height:1;padding:4px 11px;cursor:pointer}
+.seg-b+.seg-b{border-left:1px solid var(--line)}
+.seg-b.on{background:var(--accent);color:#fff;font-weight:600}
+.seg-b:not(.on):hover{background:var(--row-hover)}
 .note-card .vp{display:inline-block;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--crit);background:#fef3e8;border:1px solid #f3cda6;border-radius:999px;padding:2px 9px;margin-bottom:10px}
 .note-card p{font-size:14px;color:var(--ink-2);line-height:1.6;margin:.3em 0}
 .calc{display:grid;grid-template-columns:1fr 1fr;gap:16px}
@@ -273,6 +278,12 @@ var ERP_CFG={
       inp.disabled=false; toast("✓ Gespeichert");
     }).catch(function(err){ inp.disabled=false; toast("✗ Fehler: "+(err.message||err),true); });
   }
+  function setToggle(sheet,srcRow,scol,val){
+    if(window.__SHEETS&&window.__SHEETS[sheet]){ var row=window.__SHEETS[sheet][srcRow]||(window.__SHEETS[sheet][srcRow]=[]); while(row.length<=scol)row.push(""); row[scol]=val; }
+    var a1="'"+String(sheet).replace(/'/g,"''")+"'!"+colLetter(scol)+(srcRow+1);
+    if(window.ERP_write){ window.ERP_write(a1,val).then(function(){ toast("✓ Gespeichert"); }).catch(function(e){ toast("✗ Fehler: "+(e.message||e),true); }); }
+    if(window.__SHEETS){ boot(parseSheets(window.__SHEETS),cur); } else { render(); }
+  }
   function addRow(code){
     var v=V[code], src=v.src; if(!src||!window.ERP_sheetId){ toast("Nicht verfügbar — neu anmelden.",true); return; }
     var sid=window.ERP_sheetId(src.sheet); if(sid==null){ toast("Blatt nicht gefunden.",true); return; }
@@ -328,6 +339,10 @@ var ERP_CFG={
         if(em&&sc!=null){
           var a1="'"+v.src.sheet.replace(/'/g,"''")+"'!"+colLetter(sc)+(srcRow+1);
           h+='<td class="edit-td"><input class="cell-edit" data-a1="'+esc(a1)+'" data-sheet="'+esc(v.src.sheet)+'" data-srow="'+srcRow+'" data-scol="'+sc+'" value="'+esc(val==null?"":val)+'"></td>';
+        } else if(v.toggle&&i===v.toggle.col){
+          var sr=v.src?v.src.srcRows[it.oi]:null, cv=String(val==null?"":val).toLowerCase(), seg='<span class="seg">';
+          v.toggle.options.forEach(function(opt){ var on=cv===String(opt).toLowerCase(); seg+='<button class="seg-b'+(on?' on':'')+'" data-toggle="'+esc(v.src.sheet)+'|'+sr+'|'+i+'" data-tval="'+esc(opt)+'">'+esc(opt)+'</button>'; });
+          h+='<td>'+seg+'</span></td>';
         } else {
           var cls=(isM?'num ':'')+(k===0?'name':'');
           var disp = isM?eur(val, (Math.abs(val)<1000&&val%1!==0)?2:0):esc(val==null?"":val);
@@ -658,6 +673,7 @@ var ERP_CFG={
     var ac=e.target.closest("[data-addcol]"); if(ac){ addColumn(ac.dataset.addcol); return; }
     var dr=e.target.closest("[data-delrow]"); if(dr){ var dp=dr.dataset.delrow.split("|"); deleteRow(dp[0],+dp[1]); return; }
     var s=e.target.closest("[data-sort]"); if(s){ var col=+s.dataset.sort; var ss=sortState[cur]; sortState[cur]=(ss&&ss.col===col)?{col:col,dir:-ss.dir}:{col:col,dir:1}; render(); return; }
+    var tg=e.target.closest("[data-toggle]"); if(tg){ var tp=tg.dataset.toggle.split("|"); setToggle(tp[0],+tp[1],+tp[2],tg.dataset.tval); return; }
     var o=e.target.closest("[data-obj]"); if(o){ var pp=o.dataset.obj.split(":"); goObj(pp[0],+pp[1]); return; }
     var b=e.target.closest("[data-back]"); if(b){ go(b.dataset.back); return; }
     var g=e.target.closest("[data-go]"); if(g){ go(g.dataset.go); return; }
@@ -754,7 +770,10 @@ function parseSheets(S){
   e=extract('H2.1',2); gridview('H2.1','OWL-Vermietung – Gebäude + Mieter',e.cols,e.rows,null,[5,6,7,8],{sheet:'H2.1',srcRows:e.srcRows,headerRow:e.headerRow,edit:"auto"});
   e=extract('H3.1',2); gridview('H3.1','Gewerbl. Vermietung – Gebäude + Mieter',e.cols,e.rows,null,[6,7,8,9],{sheet:'H3.1',srcRows:e.srcRows,headerRow:e.headerRow,edit:"auto"});
   // simple grids
-  e=extract('C1',3); gridview('C1',labelOf('C1'),e.cols,e.rows,null,[5,6],{sheet:'C1',srcRows:e.srcRows,headerRow:e.headerRow,edit:"auto"});
+  var hrC1=-1; for(r=0;r<maxRow('C1');r++){ if(String(cell('C1',r,0)||"").trim().toLowerCase()==="art"){ hrC1=r; break; } } if(hrC1<0)hrC1=3;
+  var eC1=extract('C1',hrC1), moneyC1=[], typC1=-1; eC1.cols.forEach(function(c,i){ var s=String(c||""); if(/Pro Periode|Pro Jahr|€|Betrag/i.test(s))moneyC1.push(i); if(/^Typ/i.test(s))typC1=i; });
+  gridview('C1',labelOf('C1'),eC1.cols,eC1.rows,null,moneyC1,{sheet:'C1',srcRows:eC1.srcRows,headerRow:eC1.headerRow,edit:"auto"});
+  if(typC1>=0) views['C1'].toggle={col:typC1,options:["fix","variabel"]};
   e=extract('D1',3,4); gridview('D1',labelOf('D1'),e.cols,e.rows);
   e=extract('H1.2',3,9); gridview('H1.2','Marbella – Kosten / Reparaturen',e.cols,e.rows);
   ['H2.2','H3.2'].forEach(function(cd){ var ee=extract(cd,2); gridview(cd,labelOf(cd),ee.cols,ee.rows,null,null,{sheet:cd,srcRows:ee.srcRows,headerRow:ee.headerRow,edit:"auto"}); });

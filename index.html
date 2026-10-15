@@ -96,6 +96,16 @@ table.alv tfoot td{background:#f3f5f6;border-top:1px solid var(--line-strong);fo
 .seg-b+.seg-b{border-left:1px solid var(--line)}
 .seg-b.on{background:var(--accent);color:#fff;font-weight:600}
 .seg-b:not(.on):hover{background:var(--row-hover)}
+.acmodal{position:fixed;inset:0;background:rgba(29,45,59,.45);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px}
+.acbox{background:var(--surface);border-radius:12px;box-shadow:0 12px 40px rgba(29,45,59,.3);width:min(860px,96vw);max-height:92vh;display:flex;flex-direction:column;overflow:hidden}
+.achead{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--line);font-size:14px}
+.acx{border:0;background:none;font-size:18px;cursor:pointer;color:var(--ink-3);line-height:1}
+.acsub{padding:10px 18px;font-size:12.5px;color:var(--ink-2);border-bottom:1px solid var(--grid-line)}
+.acscroll{overflow:auto;flex:1}
+.acscroll table{width:100%}
+.acunk{background:#fff8f0}
+.accat{font:inherit;font-size:12.5px;padding:3px 6px;border:1px solid var(--line-strong);border-radius:6px;background:var(--surface);max-width:190px}
+.acfoot{display:flex;align-items:center;gap:10px;padding:12px 18px;border-top:1px solid var(--line)}
 .note-card .vp{display:inline-block;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--crit);background:#fef3e8;border:1px solid #f3cda6;border-radius:999px;padding:2px 9px;margin-bottom:10px}
 .note-card p{font-size:14px;color:var(--ink-2);line-height:1.6;margin:.3em 0}
 .calc{display:grid;grid-template-columns:1fr 1fr;gap:16px}
@@ -267,7 +277,7 @@ var ERP_CFG={
     });
   }
   tabsEl.addEventListener("click",function(e){ var g=e.target.closest("[data-go]"); if(g) go(g.dataset.go); });
-  var cur=null, curObj=null, sortState={}, editState={};
+  var cur=null, curObj=null, sortState={}, editState={}, AC=[], ACATS=[];
   function toast(msg,err){ var t=document.getElementById("toast"); if(!t)return; t.textContent=msg; t.className="toast show"+(err?" err":""); clearTimeout(toast._t); toast._t=setTimeout(function(){ t.className="toast"; }, err?6000:1600); }
   function saveCell(inp){
     if(!window.ERP_write){ toast("Speichern nicht verfügbar — bitte neu anmelden.",true); return; }
@@ -620,8 +630,167 @@ var ERP_CFG={
     } else { h+='<div class="note-card"><p class="empty">Noch keine Positionen diesem Buchungskreis zugeordnet.</p></div>'; }
     return h;
   }
+  /* ===== ACDOCA: Kontoauszug-Import + Auswertung ===== */
+  var ACDOCA_CATS=["Lebensmittel","Restaurants & Bars","Mobilität","Wohnen & Energie","Shopping","Reise & Freizeit","Telekommunikation","Abos & Digitales","Abos & Streaming","Versicherung","Sport & Gesundheit","Drogerie & Haushalt","Berufsausgaben","Einkommen","Umbuchung","Sonstiges","Unklar"];
+  var ACDOCA_RULES=[
+   [/rewe|lidl|prisma|k-market|k-supermark|aldi|combi|edeka|alko |minimani|resq|thomas lehr|satakunnankat|teekkarinkatu|rautatien|hallituskat|rinteenk|kauppato|hameenkatu|hämeenka|ratina|saarenkyl|kaleva/i,"Lebensmittel"],
+   [/restaurant|\bbar\b|cafe|kahvila|caf[eé]|doener|döner|kebab|pizza|osteria|sushi|green hippo|bistro|gastro|boomers|don franco|prince hamlet|buongiorno|laelta|celona|bargusto|o'connell|vohveli|brewhouse|compass group|foodup|hmshost|sodexo|daiwo|ilopilleri|pulcinella|ståhlberg|procerviisi|hämptown|santas doner|sotto|regatta|puisto|fujimi|krispy|baerlin|plaza restaurant|l'osteria|ristorante|bakery cafe|biere|backstube|karlchen/i,"Restaurants & Bars"],
+   [/\bshell\b|\baral\b|\besso\b|uber|nysse|vr\.fi|vr sailyt|arctic circle|airport express|rovaniemi|ptl\*vr|\btrip\b|pending.uber|vfi\*/i,"Mobilität"],
+   [/stadtwerke|e\.on|\beon\b/i,"Wohnen & Energie"],
+   [/jysk|interspar|normal tampere|tiger stores|partioaitta|santa_s gift|santas gift|kappahl|\bvila\b|intersport|bestseller|amazon|www.amazon/i,"Shopping"],
+   [/dm drogerie|rossmann|\bdm\b/i,"Drogerie & Haushalt"],
+   [/telekom|vodafone/i,"Telekommunikation"],
+   [/allianz/i,"Versicherung"],
+   [/egym|wellpass/i,"Sport & Gesundheit"],
+   [/netflix/i,"Abos & Streaming"],
+   [/apple|kide.app|visma floating/i,"Abos & Digitales"],
+   [/lufthansa|parkos|dauerparkticket|särkänniemi|tampere-talo/i,"Reise & Freizeit"],
+   [/lohn|gehalt/i,"Einkommen"]
+  ];
+  var ACDOCA_TRANSFER=/marbella rent|hauptkonto|an marbella|von marbella|gesendet von revolut|gesendet mit n26|scalable/i;
+  var ACDOCA_N26MAP={"Bars & Restaurants":"Restaurants & Bars","Lebensmittel":"Lebensmittel","Transport":"Mobilität","Shopping":"Shopping","Freizeit":"Reise & Freizeit","Wohnen & Energie":"Wohnen & Energie","Berufsausgaben":"Berufsausgaben","Sonstiges":"Sonstiges"};
+  function acNorm(s){ return String(s||"").toLowerCase().replace(/\s+/g," ").trim(); }
+  function acDeNum(s){ s=String(s).replace(/[€\s]/g,""); var neg=s.charAt(0)==="-"; s=s.replace(/^[+-]/,""); s=s.replace(/\./g,"").replace(",","."); var v=parseFloat(s); return isNaN(v)?0:(neg?-v:v); }
+  function acCategorize(empf,zweck,typ,n26cat,learned){
+    var key=acNorm(empf);
+    if(typ==="Umbuchung") return "Umbuchung";
+    if(ACDOCA_TRANSFER.test(empf+" "+zweck)) return "Umbuchung";
+    if(learned&&learned[key]) return learned[key];
+    if(n26cat&&ACDOCA_N26MAP[n26cat]) return ACDOCA_N26MAP[n26cat];
+    var t=(empf+" "+zweck).toLowerCase();
+    for(var i=0;i<ACDOCA_RULES.length;i++){ if(ACDOCA_RULES[i][0].test(t)) return ACDOCA_RULES[i][1]; }
+    if(typ==="Gutschrift"&&/lohn|gehalt/i.test(zweck)) return "Einkommen";
+    return "Unklar";
+  }
+  function acParseRevolut(text,konto,bkr,learned){
+    var lines=text.replace(/\r/g,"").split("\n").filter(function(l){return l.trim();});
+    function sc(line){ var o=[],c="",q=false; for(var i=0;i<line.length;i++){ var ch=line[i]; if(ch==='"'){ if(q&&line[i+1]==='"'){c+='"';i++;} else q=!q; } else if(ch===","&&!q){ o.push(c); c=""; } else c+=ch; } o.push(c); return o; }
+    var head=sc(lines[0]); function H(re){ for(var i=0;i<head.length;i++) if(re.test(head[i])) return i; return -1; }
+    var iArt=H(/^Art/i),iDesc=H(/Beschreibung/i),iBetr=H(/^Betrag/i),iGeb=H(/Gebühr/i),iDat=H(/Datum des Beginns/i);
+    var out=[];
+    for(var r=1;r<lines.length;r++){ var f=sc(lines[r]); if(f.length<head.length) continue;
+      var betr=parseFloat(f[iBetr]); if(isNaN(betr)) continue; var geb=iGeb>=0?parseFloat(f[iGeb])||0:0;
+      var art=f[iArt]||"",empf=(f[iDesc]||"").trim();
+      var typ=art==="Kartenbezahlung"?"Kartenzahlung":(art==="Transfer"?"Überweisung":(art==="Einzahlung"?"Gutschrift":art));
+      out.push({datum:(f[iDat]||"").slice(0,10),konto:konto,empf:empf,zweck:"",betrag:betr-(geb||0),kat:acCategorize(empf,"",typ,"",learned),typ:typ,bkr:bkr});
+    }
+    return out;
+  }
+  function acResetN26(l){ return /^(Kontotyp:|Kontoauszug Nr|Übersicht Nr|Gebührenübersicht|Beschreibung Verbuchungsdatum|Beschreibung Betrag|N26 Bank SE)/.test(l); }
+  function acIsBoilN26(l){
+    if(/^(IBAN:|BIC:|Erstellt am|Vierteljährlicher|Anmerkung)/.test(l)) return true;
+    if(/Handelsregister|BaFin|USt-ID|Steueridentifika|imprint@|n26\.com|Aufsichtsrat|Vorstand:|Dombret|Charlottenburg|Finanzdienstleistung|Einlagen|Allgemeinen Geschäft|Einwendungen|Rechnungsabschluss|Saldo Deines|Es kann zu|Dein Guthaben|Wir bitten|Werden innerhalb|Du kannst|in Textform/.test(l)) return true;
+    if(/^\d{1,2}\.\d{2}\.\d{4}$/.test(l)) return true;
+    if(/^\d{1,2}\/\d{4}$/.test(l)) return true;
+    if(/\d{2}\.\d{2}\.\d{4}\s+bis\s+\d{2}\.\d{2}\.\d{4}/.test(l)) return true;
+    if(/\d{5}\s+[A-ZÄÖÜ][a-zäöüß]/.test(l)) return true;
+    return false;
+  }
+  function acParseN26(text,konto,bkr,learned){
+    var raw=text.replace(/\r/g,"").split("\n").map(function(l){return l.trim();});
+    var clean=[]; for(var i=0;i<raw.length;i++){ if(raw[i]&&!acIsBoilN26(raw[i])) clean.push(raw[i]); }
+    var amtRe=/^(\d{2})\.(\d{2})\.(\d{4})\s+([+-][\d.]+,\d{2})€$/;
+    var out=[],block=[];
+    for(var j=0;j<clean.length;j++){ var l=clean[j];
+      if(acResetN26(l)){ block=[]; continue; }
+      var m=l.match(amtRe);
+      if(m&&block.length&&block[block.length-1].indexOf("Wertstellung")===0){
+        var desc=block[0]||"",typline=block[1]||"",extra=[];
+        for(var k=2;k<block.length;k++){ if(block[k].indexOf("IBAN:")!==0&&block[k].indexOf("Wertstellung")!==0) extra.push(block[k]); }
+        var zweck=extra.join(" "),typ,n26cat="";
+        if(/^Mastercard/.test(typline)){ typ="Kartenzahlung"; if(typline.indexOf("•")>=0) n26cat=typline.split("•").pop().trim(); }
+        else if(typline==="Lastschriften") typ="Lastschrift";
+        else if(typline==="Gutschriften") typ="Gutschrift";
+        else if(typline==="Belastungen") typ="Überweisung";
+        else if(typline==="Übertrag"||typline==="Umbuchung"||typline==="Tilgung") typ="Umbuchung";
+        else typ=typline;
+        out.push({datum:m[3]+"-"+m[2]+"-"+m[1],konto:konto,empf:desc,zweck:zweck,betrag:acDeNum(m[4]),kat:acCategorize(desc,zweck,typ,n26cat,learned),typ:typ,bkr:bkr});
+        block=[];
+      } else block.push(l);
+    }
+    return out;
+  }
+  function acDedupKey(t){ return t.datum+"|"+(Math.round(t.betrag*100)/100).toFixed(2)+"|"+acNorm(t.empf)+"|"+acNorm(t.konto); }
+  function acAcctMatch(xk,label,bank,konto){ xk=acNorm(xk); if(!xk)return false; var L=acNorm(label),B=acNorm(bank),K=acNorm(konto); return xk===L||xk===K||xk===B||(K&&xk.indexOf(K)>=0)||(B&&xk.indexOf(B)>=0)||(L&&L.indexOf(xk)>=0); }
+  var PDFJS_V="3.11.174";
+  function loadPdfJs(){ return new Promise(function(res,rej){ if(window.pdfjsLib){res(window.pdfjsLib);return;} var s=document.createElement("script"); s.src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/"+PDFJS_V+"/pdf.min.js"; s.onload=function(){ try{ window.pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/"+PDFJS_V+"/pdf.worker.min.js"; }catch(e){} res(window.pdfjsLib); }; s.onerror=function(){ rej(new Error("pdf.js nicht ladbar")); }; document.head.appendChild(s); }); }
+  function pdfToText(buf){ return loadPdfJs().then(function(pdfjs){ return pdfjs.getDocument({data:buf}).promise.then(function(pdf){ var tasks=[]; for(var p=1;p<=pdf.numPages;p++){ tasks.push(pdf.getPage(p).then(function(pg){ return pg.getTextContent().then(function(tc){ var byY={}; tc.items.forEach(function(it){ var y=Math.round(it.transform[5]); (byY[y]=byY[y]||[]).push([it.transform[4],it.str]); }); var ys=Object.keys(byY).map(Number).sort(function(a,b){return b-a;}); return ys.map(function(y){ return byY[y].sort(function(a,b){return a[0]-b[0];}).map(function(z){return z[1];}).join(" ").replace(/\s+/g," ").trim(); }).join("\n"); }); })); } return Promise.all(tasks).then(function(ps){ return ps.join("\n"); }); }); }); }
+  function acctLabel(row){ return ((String(row[1]||""))+" · "+(String(row[2]||""))).replace(/^ · | · $/,""); }
+  function bankObjectHTML(oi){
+    var v=V['F'], row=v.rows[oi];
+    var bank=String(row[1]||""),konto=String(row[2]||""),saldo=Number(row[3])||0,bkr=String(row[4]||"");
+    var label=acctLabel(row), t=byCode['F']||{label:'Global Cash'};
+    var tx=AC.filter(function(x){ return acAcctMatch(x.konto,label,bank,konto); });
+    var h='<div class="obj-head"><div class="back" data-back="F">‹ '+esc(t.label)+'</div><h1>'+esc(label||bank)+'</h1><div class="st">Buchungskreis '+esc(bkr)+'</div>';
+    h+='<div class="facets"><div class="f"><div class="k">Kontostand</div><div class="v">'+eur(saldo,2)+'</div></div><div class="f"><div class="k">Buchungen im Journal</div><div class="v">'+tx.length+'</div></div></div>';
+    h+='<div style="margin-top:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><button class="editbtn on" data-acupload="'+oi+'">⬆︎ Kontoauszug hochladen</button><span class="muted" style="font-size:12px">CSV (Revolut) oder PDF (N26) · Auswertung landet im ACDOCA-Journal</span><input type="file" id="acfile" accept=".csv,.pdf" hidden></div></div>';
+    h+= tx.length? acAuswertungHTML(tx) : '<div class="osec"><div class="t">Auswertung</div><div class="body"><div class="empty">Noch keine Buchungen für dieses Konto. Lade oben einen Kontoauszug hoch — die Buchungen landen im ACDOCA-Journal und werden hier ausgewertet.</div></div></div>';
+    h+='<div class="osec"><div class="t">Dokumente</div><div class="body"><div class="empty">Noch keine Dokumente — werden später in Google Drive abgelegt.</div></div></div>';
+    return h;
+  }
+  function acAuswertungHTML(tx){
+    var out=0,inc=0,umb=0,bycat={};
+    tx.forEach(function(t){ if(/^Umbuchung/i.test(t.kat)){ umb+=t.betrag; return; } if(t.betrag<0){ out+=t.betrag; var k=t.kat||"Unklar"; bycat[k]=(bycat[k]||0)+t.betrag; } else inc+=t.betrag; });
+    var h='<section class="tiles">'+tile("Ausgaben",eur(out,0),"ohne Umbuchungen","big")+tile("Eingänge",eur(inc,0),"Gehalt, Erstattungen …")+tile("Umbuchungen",eur(umb,0),"zwischen eigenen Konten")+tile("Buchungen",tx.length,"im Journal")+'</section>';
+    var cats=Object.keys(bycat).sort(function(a,b){return bycat[a]-bycat[b];}), mx=1; cats.forEach(function(k){mx=Math.max(mx,Math.abs(bycat[k]));});
+    h+='<div class="panel"><div class="alv-bar"><h2>Ausgaben je Kategorie</h2><span class="sp"></span><span class="count">'+eur(out,0)+'</span></div><div style="padding:14px 16px 16px">';
+    if(cats.length) cats.forEach(function(k){ var val=bycat[k],w=Math.max(1.5,Math.abs(val)/mx*100); h+='<div class="bar-row"><div class="bl">'+esc(k)+'</div><div class="bt"><div class="bf" style="width:'+w.toFixed(1)+'%"></div></div><div class="bv">'+eur(val,0)+'</div></div>'; });
+    else h+='<div class="empty">Nur Eingänge/Umbuchungen.</div>';
+    h+='</div></div>';
+    var sorted=tx.slice().sort(function(a,b){return a.datum<b.datum?1:a.datum>b.datum?-1:0;});
+    h+='<div class="panel"><div class="alv-bar"><h2>Buchungen</h2><span class="count">'+tx.length+'</span><span class="sp"></span><span class="mini-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input class="grid-filter" placeholder="Filtern…"></span></div><div class="alv-wrap"><table class="alv"><thead><tr><th>Datum</th><th>Empfänger</th><th>Kategorie</th><th>Typ</th><th class="num">Betrag</th></tr></thead><tbody>';
+    sorted.slice(0,400).forEach(function(t){ var neg=t.betrag<0; h+='<tr><td>'+esc(t.datum)+'</td><td class="name">'+esc(t.empf)+'</td><td>'+esc(t.kat)+'</td><td class="muted">'+esc(t.typ)+'</td><td class="num'+(neg?' neg':' pos')+'">'+eur(t.betrag,2)+'</td></tr>'; });
+    h+='</tbody></table></div></div>';
+    return h;
+  }
+  function acHandleFile(inp){
+    var file=inp.files&&inp.files[0]; if(!file){ return; }
+    var oi=curObj?curObj.oi:null; if(oi==null||!V['F']){ toast("Kein Konto gewählt.",true); return; }
+    var row=V['F'].rows[oi], label=acctLabel(row), bkr=String(row[4]||"");
+    var learned={}; AC.forEach(function(t){ if(t.empf&&t.kat&&t.kat!=="Unklar") learned[acNorm(t.empf)]=t.kat; });
+    var nm=(file.name||"").toLowerCase(), quelle=(file.name||"").replace(/\.(csv|pdf)$/i,"");
+    toast("Lese "+file.name+" …");
+    var done=function(tx){ tx.forEach(function(t){t.quelle=quelle;}); if(!tx.length){ toast("Keine Buchungen erkannt.",true); return; } acShowReview(tx,label,oi); };
+    if(/\.pdf$/.test(nm)){ file.arrayBuffer().then(function(b){ return pdfToText(b); }).then(function(txt){ done(acParseN26(txt,label,bkr,learned)); }).catch(function(e){ toast("✗ PDF-Fehler: "+(e.message||e),true); }); }
+    else { file.text().then(function(txt){ done(acParseRevolut(txt,label,bkr,learned)); }).catch(function(e){ toast("✗ CSV-Fehler: "+(e.message||e),true); }); }
+    inp.value="";
+  }
+  function acShowReview(tx,label,oi){
+    var ex={}; AC.forEach(function(t){ var k=acDedupKey(t); ex[k]=(ex[k]||0)+1; });
+    var seen={}; tx.forEach(function(t){ var k=acDedupKey(t); seen[k]=(seen[k]||0)+1; t._dup=(seen[k]<=(ex[k]||0)); });
+    var fresh=tx.filter(function(t){return !t._dup;}), dupN=tx.length-fresh.length;
+    var cats=ACDOCA_CATS.slice(); ACATS.forEach(function(c){ if(cats.indexOf(c)<0) cats.push(c); });
+    var unk=fresh.filter(function(t){return t.kat==="Unklar";}).length;
+    var m=document.createElement("div"); m.className="acmodal";
+    var h='<div class="acbox"><div class="achead"><div><b>Kontoauszug prüfen</b> · '+esc(label)+'</div><button class="acx" data-acclose>✕</button></div>';
+    h+='<div class="acsub">'+fresh.length+' neue Buchungen'+(dupN?' · '+dupN+' Dubletten übersprungen':'')+(fresh.length?(unk?' · <b style="color:var(--crit)">'+unk+' unklar</b> — bitte zuordnen':' · alle kategorisiert ✓'):'')+'</div>';
+    if(fresh.length){
+      h+='<div class="acscroll"><table class="alv"><thead><tr><th>Datum</th><th>Empfänger</th><th>Kategorie</th><th class="num">Betrag</th></tr></thead><tbody>';
+      fresh.forEach(function(t,i){ var opts=cats.map(function(c){return '<option'+(c===t.kat?' selected':'')+'>'+esc(c)+'</option>';}).join("");
+        h+='<tr'+(t.kat==="Unklar"?' class="acunk"':'')+'><td>'+esc(t.datum)+'</td><td class="name">'+esc(t.empf)+'</td><td><select class="accat" data-i="'+i+'">'+opts+'</select></td><td class="num'+(t.betrag<0?' neg':' pos')+'">'+eur(t.betrag,2)+'</td></tr>'; });
+      h+='</tbody></table></div>';
+      h+='<div class="acfoot"><span class="muted" style="font-size:12px">Korrigierte Kategorien werden gelernt (nächster Import automatisch).</span><span class="sp"></span><button class="editbtn" data-acclose>Abbrechen</button><button class="editbtn on" data-acimport>'+fresh.length+' importieren</button></div>';
+    } else {
+      h+='<div class="acscroll"><div class="empty" style="padding:20px">Alles schon im Journal — nichts Neues zu importieren.</div></div><div class="acfoot"><span class="sp"></span><button class="editbtn on" data-acclose>Schließen</button></div>';
+    }
+    h+='</div>'; m.innerHTML=h; document.body.appendChild(m);
+    m.addEventListener("change",function(e){ if(e.target.classList.contains("accat")){ fresh[+e.target.dataset.i].kat=e.target.value; e.target.closest("tr").classList.remove("acunk"); } });
+    m.addEventListener("click",function(e){ if(e.target.closest("[data-acclose]")){ m.remove(); return; } if(e.target.closest("[data-acimport]")){ m.remove(); acDoImport(fresh,oi); } });
+  }
+  function acDoImport(fresh,oi){
+    if(!fresh.length){ return; }
+    if(!window.ERP_append){ toast("Import braucht Anmeldung — bitte neu einloggen.",true); return; }
+    function uid(){ return "tx"+Date.now().toString(36)+Math.floor(Math.random()*1e4).toString(36); }
+    var rows=fresh.map(function(t){ return [uid(),t.datum,t.konto,t.empf,t.zweck||"",t.betrag,t.kat,t.typ,t.bkr||"",t.quelle||"","","","Ist",""]; });
+    toast("Importiere "+rows.length+" Buchungen ins ACDOCA-Journal …");
+    window.ERP_append("ACDOCA",rows).then(function(){
+      if(window.__SHEETS){ var A=window.__SHEETS['ACDOCA']||(window.__SHEETS['ACDOCA']=[]); rows.forEach(function(r){A.push(r);}); boot(parseSheets(window.__SHEETS),'F'); goObj('F',oi); }
+      toast("✓ "+rows.length+" Buchungen importiert.");
+    }).catch(function(e){ toast("✗ Import-Fehler: "+(e.message||e),true); });
+  }
   function objectHTML(code, oi){
     if(code==="B2") return bkrHTML(V["B2"].rows[oi]);
+    if(code==="F") return bankObjectHTML(oi);
     var v=V[code], cols=v.cols, row=v.rows[oi], money=v.money_idx||[];
     var titleIdx=-1,i;
     for(i=0;i<cols.length;i++){ if(/objekt|^name|bank|titel/i.test(cols[i])&&!/^ID/i.test(cols[i])&&row[i]){ titleIdx=i; break; } }
@@ -674,6 +843,7 @@ var ERP_CFG={
     var dr=e.target.closest("[data-delrow]"); if(dr){ var dp=dr.dataset.delrow.split("|"); deleteRow(dp[0],+dp[1]); return; }
     var s=e.target.closest("[data-sort]"); if(s){ var col=+s.dataset.sort; var ss=sortState[cur]; sortState[cur]=(ss&&ss.col===col)?{col:col,dir:-ss.dir}:{col:col,dir:1}; render(); return; }
     var tg=e.target.closest("[data-toggle]"); if(tg){ var tp=tg.dataset.toggle.split("|"); setToggle(tp[0],+tp[1],+tp[2],tg.dataset.tval); return; }
+    var up=e.target.closest("[data-acupload]"); if(up){ var fi=document.getElementById("acfile"); if(fi) fi.click(); return; }
     var o=e.target.closest("[data-obj]"); if(o){ var pp=o.dataset.obj.split(":"); goObj(pp[0],+pp[1]); return; }
     var b=e.target.closest("[data-back]"); if(b){ go(b.dataset.back); return; }
     var g=e.target.closest("[data-go]"); if(g){ go(g.dataset.go); return; }
@@ -684,10 +854,10 @@ var ERP_CFG={
       if(tb) Array.prototype.forEach.call(tb.rows,function(tr){ tr.style.display = tr.textContent.toLowerCase().indexOf(q)>=0 ? "" : "none"; });
     }
   });
-  document.getElementById("page").addEventListener("change",function(e){ if(e.target.classList.contains("cell-edit")) saveCell(e.target); });
+  document.getElementById("page").addEventListener("change",function(e){ if(e.target.id==="acfile"){ acHandleFile(e.target); return; } if(e.target.classList.contains("cell-edit")) saveCell(e.target); });
   document.getElementById("page").addEventListener("keydown",function(e){ if(e.target.classList.contains("cell-edit")&&e.key==="Enter"){ e.preventDefault(); e.target.blur(); } });
   function boot(data, keepTab){
-    D=data; nav=D.nav; V=D.views; K=D.kpis;
+    D=data; nav=D.nav; V=D.views; K=D.kpis; AC=D.acdoca||[]; ACATS=D.acats||[];
     byCode={}; nav.forEach(function(t){byCode[t.code]=t;(t.children||[]).forEach(function(ch){byCode[ch.code]=ch;});});
     sortState={}; buildTabs(); go(keepTab||"A");
   }
@@ -798,7 +968,24 @@ function parseSheets(S){
   for(r=13;r<15;r++){ var n5=cell('I1',r,1); if(n5)addItem(cell('I1',r,6),"Krypto",n5,(num(cell('I1',r,3))||0)*(num(cell('I1',r,4))||0)); }
   for(r=20;r<24;r++){ var n6=cell('I1',r,1); if(n6)addItem(cell('I1',r,7),"Edelmetall",n6,(num(cell('I1',r,3))||0)*(num(cell('I1',r,5))||0)); }
   for(r=3;r<5;r++){ var n7=cell('I2',r,1); if(n7)addItem(cell('I2',r,4),"Sonstiges",n7,cell('I2',r,2)); }
-  return {nav:nav,views:views,kpis:kpis,bkr:bkr};
+  // ACDOCA – Buchungsjournal
+  var acdoca=[], acatsCount={};
+  (function(){
+    var A=S['ACDOCA']||[]; if(!A.length) return;
+    var hr=-1; for(var rr=0; rr<Math.min(A.length,6); rr++){ var rowh=A[rr]||[]; if(rowh.some(function(x){return /Buchungsdatum/i.test(String(x==null?"":x));})){ hr=rr; break; } }
+    if(hr<0) hr=0;
+    var H=(A[hr]||[]).map(function(x){return String(x==null?"":x);});
+    function ci(re){ for(var i=0;i<H.length;i++){ if(re.test(H[i])) return i; } return -1; }
+    var ix={id:ci(/^ID/i),datum:ci(/Buchungsdatum|^Datum/i),konto:ci(/^Konto/i),empf:ci(/Empfänger|Gegenpartei/i),zweck:ci(/Verwendungszweck/i),betrag:ci(/Betrag/i),kat:ci(/Kategorie/i),typ:ci(/^Typ/i),bkr:ci(/Buchungskreis/i)};
+    for(var r2=hr+1;r2<A.length;r2++){ var row=A[r2]||[];
+      var dv=ix.datum>=0?row[ix.datum]:null, bv=ix.betrag>=0?row[ix.betrag]:null;
+      if((dv==null||dv==="")&&(bv==null||bv==="")) continue;
+      var bn=num(bv); var kat=ix.kat>=0?String(row[ix.kat]||""):"";
+      acdoca.push({id:ix.id>=0?String(row[ix.id]||""):"",datum:dv?String(dv):"",konto:ix.konto>=0?String(row[ix.konto]||""):"",empf:ix.empf>=0?String(row[ix.empf]||""):"",zweck:ix.zweck>=0?String(row[ix.zweck]||""):"",betrag:bn==null?0:bn,kat:kat,typ:ix.typ>=0?String(row[ix.typ]||""):"",bkr:ix.bkr>=0?String(row[ix.bkr]||""):""});
+      if(kat) acatsCount[kat]=1;
+    }
+  })();
+  return {nav:nav,views:views,kpis:kpis,bkr:bkr,acdoca:acdoca,acats:Object.keys(acatsCount)};
 }
 </script>
 <script>
@@ -809,6 +996,12 @@ function parseSheets(S){
   window.ERP_write=function(a1,value){
     var url="https://sheets.googleapis.com/v4/spreadsheets/"+ERP_CFG.SPREADSHEET_ID+"/values/"+encodeURIComponent(a1)+"?valueInputOption=USER_ENTERED";
     return fetch(url,{method:"PUT",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({values:[[value]]})}).then(function(r){ return r.text().then(function(t){ if(!r.ok) throw new Error("HTTP "+r.status+": "+t.slice(0,160)); return JSON.parse(t); }); });
+  };
+  window.ERP_append=function(sheetTitle, rows2d){
+    if(!token) return Promise.reject(new Error("nicht angemeldet"));
+    var rng=encodeURIComponent("'"+String(sheetTitle).replace(/'/g,"''")+"'!A1");
+    var url="https://sheets.googleapis.com/v4/spreadsheets/"+ERP_CFG.SPREADSHEET_ID+"/values/"+rng+":append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS";
+    return fetch(url,{method:"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({values:rows2d})}).then(function(r){ return r.text().then(function(t){ if(!r.ok) throw new Error("HTTP "+r.status+": "+t.slice(0,180)); return JSON.parse(t); }); });
   };
   window.ERP_format=function(){
     var tt=(window.ERP&&window.ERP.toast)||function(){};

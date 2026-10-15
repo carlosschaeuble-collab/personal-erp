@@ -676,7 +676,6 @@ var ERP_CFG={
     }
     return out;
   }
-  function acResetN26(l){ return /^(Kontotyp:|Kontoauszug Nr|Übersicht Nr|Gebührenübersicht|Beschreibung Verbuchungsdatum|Beschreibung Betrag|N26 Bank SE)/.test(l); }
   function acIsBoilN26(l){
     if(/^(IBAN:|BIC:|Erstellt am|Vierteljährlicher|Anmerkung)/.test(l)) return true;
     if(/Handelsregister|BaFin|USt-ID|Steueridentifika|imprint@|n26\.com|Aufsichtsrat|Vorstand:|Dombret|Charlottenburg|Finanzdienstleistung|Einlagen|Allgemeinen Geschäft|Einwendungen|Rechnungsabschluss|Saldo Deines|Es kann zu|Dein Guthaben|Wir bitten|Werden innerhalb|Du kannst|in Textform/.test(l)) return true;
@@ -687,26 +686,25 @@ var ERP_CFG={
     return false;
   }
   function acParseN26(text,konto,bkr,learned){
+    /* N26-PDF (pdf.js): je Buchung „<Empfänger> <Datum> <Betrag>€" in EINER Zeile,
+       darunter Typ-Zeile (Mastercard•…/Lastschriften/Übertrag…) + evtl. Verwendungszweck, Ende „Wertstellung …". */
     var raw=text.replace(/\r/g,"").split("\n").map(function(l){return l.trim();});
     var clean=[]; for(var i=0;i<raw.length;i++){ if(raw[i]&&!acIsBoilN26(raw[i])) clean.push(raw[i]); }
-    var amtRe=/^(\d{2})\.(\d{2})\.(\d{4})\s+([+-][\d.]+,\d{2})€$/;
-    var out=[],block=[];
-    for(var j=0;j<clean.length;j++){ var l=clean[j];
-      if(acResetN26(l)){ block=[]; continue; }
-      var m=l.match(amtRe);
-      if(m&&block.length&&block[block.length-1].indexOf("Wertstellung")===0){
-        var desc=block[0]||"",typline=block[1]||"",extra=[];
-        for(var k=2;k<block.length;k++){ if(block[k].indexOf("IBAN:")!==0&&block[k].indexOf("Wertstellung")!==0) extra.push(block[k]); }
-        var zweck=extra.join(" "),typ,n26cat="";
-        if(/^Mastercard/.test(typline)){ typ="Kartenzahlung"; if(typline.indexOf("•")>=0) n26cat=typline.split("•").pop().trim(); }
-        else if(typline==="Lastschriften") typ="Lastschrift";
-        else if(typline==="Gutschriften") typ="Gutschrift";
-        else if(typline==="Belastungen") typ="Überweisung";
-        else if(typline==="Übertrag"||typline==="Umbuchung"||typline==="Tilgung") typ="Umbuchung";
-        else typ=typline;
-        out.push({datum:m[3]+"-"+m[2]+"-"+m[1],konto:konto,empf:desc,zweck:zweck,betrag:acDeNum(m[4]),kat:acCategorize(desc,zweck,typ,n26cat,learned),typ:typ,bkr:bkr});
-        block=[];
-      } else block.push(l);
+    var mainRe=/^(.*?)(\d{2})\.(\d{2})\.(\d{4})\s+([+-][\d.]+,\d{2})€$/;
+    var out=[];
+    for(var j=0;j<clean.length;j++){ var m=clean[j].match(mainRe); if(!m) continue;
+      var desc=(m[1]||"").trim(), datum=m[4]+"-"+m[3]+"-"+m[2], betrag=acDeNum(m[5]);
+      var typline="", extra=[];
+      for(var k=j+1;k<clean.length;k++){ var nx=clean[k]; if(mainRe.test(nx)||nx.indexOf("Wertstellung")===0) break; if(!typline) typline=nx; else extra.push(nx); }
+      var zweck=extra.join(" "),typ,n26cat="";
+      if(/^Mastercard/.test(typline)){ typ="Kartenzahlung"; if(typline.indexOf("•")>=0) n26cat=typline.split("•").pop().trim(); }
+      else if(typline==="Lastschriften") typ="Lastschrift";
+      else if(typline==="Gutschriften") typ="Gutschrift";
+      else if(typline==="Belastungen") typ="Überweisung";
+      else if(typline==="Übertrag"||typline==="Umbuchung"||typline==="Tilgung") typ="Umbuchung";
+      else typ=typline;
+      if(!desc) desc=typline;
+      out.push({datum:datum,konto:konto,empf:desc,zweck:zweck,betrag:betrag,kat:acCategorize(desc,zweck,typ,n26cat,learned),typ:typ,bkr:bkr});
     }
     return out;
   }

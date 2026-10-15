@@ -300,7 +300,7 @@ var ERP_CFG={
   function go(code){ cur=code; curObj=null; render(); window.scrollTo(0,0); setActive(code); }
   function goObj(code,oi){ cur=code; curObj={code:code,oi:oi}; render(); window.scrollTo(0,0); setActive(code); }
   function head(title,crumb){ return (crumb?'<div class="crumb">'+esc(crumb)+'</div>':'')+'<div class="page-head"><h1>'+esc(title)+'</h1></div>'; }
-  var OBJECTABLE={"H2.1":1,"H3.1":1,"B1":1,"F":1,"G":1,"B2":1};
+  var OBJECTABLE={"H2.1":1,"H3.1":1,"B1":1,"F":1,"G":1,"B2":1,"C1":1};
   function editColOf(v,i){ if(!v.src||!v.src.edit)return null; if(v.src.edit==="auto"){ return /^ID/i.test(v.cols[i])?null:i; } for(var j=0;j<v.src.edit.length;j++){ if(v.src.edit[j].c===i)return v.src.edit[j].sc; } return null; }
   function colLetter(n){ var s=""; n=n+1; while(n>0){ var rr=(n-1)%26; s=String.fromCharCode(65+rr)+s; n=Math.floor((n-1)/26);} return s; }
   function gridHTML(v, code){
@@ -370,12 +370,12 @@ var ERP_CFG={
   function newsItem(tag,txt){ return '<div class="item"><span class="tag">'+tag+'</span><span>'+esc(txt)+'</span></div>'; }
   function investHTML(v){
     var em=!!editState["I2"];
-    var dep=0,gv=0; v.wp.rows.forEach(function(r){dep+=r[5];gv+=r[6];}); v.kr.rows.forEach(function(r){dep+=r[4];gv+=r[5];}); v.em.rows.forEach(function(r){dep+=r[5];gv+=r[6];});
+    var dep=0,gv=0; v.wp.rows.forEach(function(r){dep+=r[6];gv+=r[7];}); v.kr.rows.forEach(function(r){dep+=r[5];gv+=r[6];}); v.em.rows.forEach(function(r){dep+=r[6];gv+=r[7];});
     var cost=dep-gv, gvPct=cost?gv/cost*100:0;
     var h='<div class="crumb">Investments – Wertpapiere</div><div class="page-head"><h1>Investments</h1><span style="flex:1"></span><button class="editbtn'+(em?' on':'')+'" data-edit="I2">'+(em?'✓ Fertig':'✎ Bearbeiten')+'</button></div>';
-    if(em){ h+='<div class="note-card" style="padding:10px 14px;margin-bottom:12px;max-width:none"><p style="margin:0;font-size:12.5px" class="muted">Name, Stück/Menge, Kurs &amp; Co. editierbar — <b>Wert und G/V rechnen sich automatisch</b> nach „✓ Fertig". (Einstand pflegst du in Google Sheets.)</p></div>'; }
+    if(em){ h+='<div class="note-card" style="padding:10px 14px;margin-bottom:12px;max-width:none"><p style="margin:0;font-size:12.5px" class="muted">Name, Stück/Menge, Kurs &amp; Co. editierbar — <b>Wert und G/V rechnen sich automatisch</b> nach „✓ Fertig".</p></div>'; }
     else {
-      var wpS=0; v.wp.rows.forEach(function(r){wpS+=r[5];}); var krS=0; v.kr.rows.forEach(function(r){krS+=r[4];}); var emS=0; v.em.rows.forEach(function(r){emS+=r[5];});
+      var wpS=0; v.wp.rows.forEach(function(r){wpS+=r[6];}); var krS=0; v.kr.rows.forEach(function(r){krS+=r[5];}); var emS=0; v.em.rows.forEach(function(r){emS+=r[6];});
       h+='<section class="tiles">'
         +tile("Depotwert",eur(dep),"Aktien · ETFs · Krypto · Edelmetalle","big")
         +'<div class="tile"><p class="k">Gewinn / Verlust</p><div class="v" style="color:'+(gv>=0?'var(--pos)':'var(--neg)')+'">'+(gv>=0?"+":"")+eur(gv)+'</div><div class="d" style="color:'+(gv>=0?'var(--pos)':'var(--neg)')+'">'+(gv>=0?"+":"")+gvPct.toFixed(1)+' % zum Einstand</div></div>'
@@ -387,9 +387,9 @@ var ERP_CFG={
       items.forEach(function(it){ var w=Math.max(1.5,it[1]/mx*100), pct=dep?it[1]/dep*100:0; h+='<div class="bar-row"><div class="bl">'+it[0]+'</div><div class="bt"><div class="bf" style="width:'+w.toFixed(1)+'%"></div></div><div class="bv">'+eur(it[1])+' <span class="muted" style="font-weight:400">· '+pct.toFixed(0)+'%</span></div></div>'; });
       h+='</div></div>';
     }
-    h+=section("Wertpapiere",v.wp,[3,4,5,6],5,6,em,dep);
-    h+=section("Kryptowährungen",v.kr,[2,3,4,5],4,5,em,dep);
-    h+=section("Edelmetalle",v.em,[4,5,6],5,6,em,dep);
+    h+=section("Wertpapiere",v.wp,[3,4,5,6,7],6,7,em,dep);
+    h+=section("Kryptowährungen",v.kr,[2,3,4,5,6],5,6,em,dep);
+    h+=section("Edelmetalle",v.em,[4,5,6,7],6,7,em,dep);
     return h;
   }
   function section(title,t,moneyIdx,wertIdx,gvIdx,em,dep){
@@ -724,13 +724,13 @@ function parseSheets(S){
   var rowsG=[],srcG=[]; for(r=1;r<maxRow('G');r++){ var art=cell('G',r,1); if(!art||String(art).trim()==="Summe")continue; var betrag=num(cell('G',r,4))||0; var saldo=(String(art).indexOf("Verbindlich")===0)?-betrag:betrag; rowsG.push([cell('G',r,0),art,cell('G',r,2),cell('G',r,3),betrag,cell('G',r,5),cell('G',r,6),cell('G',r,7),saldo]); srcG.push(r); }
   gridview('G','Global AR/AP',['ID','Art','Name','Gegenpartei','Betrag (€)','Miete','Start','Bkr','Saldo (€)'],rowsG,8,[4,8],{sheet:'G',srcRows:srcG,headerRow:0,edit:mapCols(1,8)});
   // investments
-  var wp=[],wpR=[]; for(r=3;r<9;r++){ var nm=cell('I1',r,1); if(!nm)continue; var s_=num(cell('I1',r,4)),ks=num(cell('I1',r,5)),ein=num(cell('I1',r,6)); var wert=(s_||0)*(ks||0),cost=(s_||0)*(ein||0); wp.push([nm,cell('I1',r,2),cell('I1',r,3),s_,ks,round2(wert),round2(wert-cost)]); wpR.push(r); }
-  var kr=[],krR=[]; for(r=13;r<15;r++){ var nm2=cell('I1',r,1); if(!nm2)continue; var mg=num(cell('I1',r,3)),ks2=num(cell('I1',r,4)),ei2=num(cell('I1',r,5)); var we2=(mg||0)*(ks2||0),co2=(mg||0)*(ei2||0); kr.push([nm2,cell('I1',r,2),mg,ks2,round2(we2),round2(we2-co2)]); krR.push(r); }
-  var em=[],emR=[]; for(r=20;r<24;r++){ var nm3=cell('I1',r,1); if(!nm3)continue; var mg3=num(cell('I1',r,3)),ks3=num(cell('I1',r,5)),ei3=num(cell('I1',r,6)); var we3=(mg3||0)*(ks3||0),co3=(mg3||0)*(ei3||0); em.push([nm3,cell('I1',r,2),mg3,cell('I1',r,4),ks3,round2(we3),round2(we3-co3)]); emR.push(r); }
+  var wp=[],wpR=[]; for(r=3;r<9;r++){ var nm=cell('I1',r,1); if(!nm)continue; var s_=num(cell('I1',r,4)),ks=num(cell('I1',r,5)),ein=num(cell('I1',r,6)); var wert=(s_||0)*(ks||0),cost=(s_||0)*(ein||0); wp.push([nm,cell('I1',r,2),cell('I1',r,3),s_,ks,ein,round2(wert),round2(wert-cost)]); wpR.push(r); }
+  var kr=[],krR=[]; for(r=13;r<15;r++){ var nm2=cell('I1',r,1); if(!nm2)continue; var mg=num(cell('I1',r,3)),ks2=num(cell('I1',r,4)),ei2=num(cell('I1',r,5)); var we2=(mg||0)*(ks2||0),co2=(mg||0)*(ei2||0); kr.push([nm2,cell('I1',r,2),mg,ks2,ei2,round2(we2),round2(we2-co2)]); krR.push(r); }
+  var em=[],emR=[]; for(r=20;r<24;r++){ var nm3=cell('I1',r,1); if(!nm3)continue; var mg3=num(cell('I1',r,3)),ks3=num(cell('I1',r,5)),ei3=num(cell('I1',r,6)); var we3=(mg3||0)*(ks3||0),co3=(mg3||0)*(ei3||0); em.push([nm3,cell('I1',r,2),mg3,cell('I1',r,4),ks3,ei3,round2(we3),round2(we3-co3)]); emR.push(r); }
   views['I2']={kind:"invest",title:"Investments – Wertpapiere",
-    wp:{cols:["Name","ISIN","Depot","Stück","Kurs (€)","Wert (€)","G/V (€)"],rows:wp,srcRows:wpR,edit:[{d:0,s:1},{d:1,s:2},{d:2,s:3},{d:3,s:4},{d:4,s:5}]},
-    kr:{cols:["Name","Wallet","Menge","Kurs (€)","Wert (€)","G/V (€)"],rows:kr,srcRows:krR,edit:[{d:0,s:1},{d:1,s:2},{d:2,s:3},{d:3,s:4}]},
-    em:{cols:["Name","Art","Menge","Einheit","Kurs (€)","Wert (€)","G/V (€)"],rows:em,srcRows:emR,edit:[{d:0,s:1},{d:1,s:2},{d:2,s:3},{d:3,s:4},{d:4,s:5}]}};
+    wp:{cols:["Name","ISIN","Depot","Stück","Kurs (€)","Einstand (€)","Wert (€)","G/V (€)"],rows:wp,srcRows:wpR,edit:[{d:0,s:1},{d:1,s:2},{d:2,s:3},{d:3,s:4},{d:4,s:5},{d:5,s:6}]},
+    kr:{cols:["Name","Wallet","Menge","Kurs (€)","Einstand (€)","Wert (€)","G/V (€)"],rows:kr,srcRows:krR,edit:[{d:0,s:1},{d:1,s:2},{d:2,s:3},{d:3,s:4},{d:4,s:5}]},
+    em:{cols:["Name","Art","Menge","Einheit","Kurs (€)","Einstand (€)","Wert (€)","G/V (€)"],rows:em,srcRows:emR,edit:[{d:0,s:1},{d:1,s:2},{d:2,s:3},{d:3,s:4},{d:4,s:5},{d:5,s:6}]}};
   e=extract('I2',2); gridview('I3','Investments – Sonstige Vermögensgegenstände',e.cols,e.rows,2,[2,3],{sheet:'I2',srcRows:e.srcRows,headerRow:e.headerRow,edit:"auto"});
   // GuV
   var months=[]; for(r=5;r<=30;r++){ var jahr=cell('H1.3',r,0),monat=cell('H1.3',r,1); if(monat==null||(typeof monat==="string"&&monat.indexOf("Summe")===0))continue;
@@ -754,7 +754,7 @@ function parseSheets(S){
   e=extract('H2.1',2); gridview('H2.1','OWL-Vermietung – Gebäude + Mieter',e.cols,e.rows,null,[5,6,7,8],{sheet:'H2.1',srcRows:e.srcRows,headerRow:e.headerRow,edit:"auto"});
   e=extract('H3.1',2); gridview('H3.1','Gewerbl. Vermietung – Gebäude + Mieter',e.cols,e.rows,null,[6,7,8,9],{sheet:'H3.1',srcRows:e.srcRows,headerRow:e.headerRow,edit:"auto"});
   // simple grids
-  e=extract('C1',3,7); gridview('C1',labelOf('C1'),e.cols,e.rows);
+  e=extract('C1',3); gridview('C1',labelOf('C1'),e.cols,e.rows,null,[5,6],{sheet:'C1',srcRows:e.srcRows,headerRow:e.headerRow,edit:"auto"});
   e=extract('D1',3,4); gridview('D1',labelOf('D1'),e.cols,e.rows);
   e=extract('H1.2',3,9); gridview('H1.2','Marbella – Kosten / Reparaturen',e.cols,e.rows);
   ['H2.2','H3.2'].forEach(function(cd){ var ee=extract(cd,2); gridview(cd,labelOf(cd),ee.cols,ee.rows,null,null,{sheet:cd,srcRows:ee.srcRows,headerRow:ee.headerRow,edit:"auto"}); });
@@ -762,7 +762,7 @@ function parseSheets(S){
   ['H2.3','H3.3'].forEach(function(cd){ var rows=[]; for(r=3;r<maxRow(cd);r++){ var a=cell(cd,r,0); if(!a)continue; rows.push([String(a),cell(cd,r,1)]); } views[cd]={kind:"pnl",title:labelOf(cd),rows:rows}; });
   // KPIs
   var cash=0; rowsF.forEach(function(x){cash+=x[3]||0;});
-  var wpS=0; wp.forEach(function(x){wpS+=x[5];}); var krS=0; kr.forEach(function(x){krS+=x[4];}); var emS=0; em.forEach(function(x){emS+=x[5];});
+  var wpS=0; wp.forEach(function(x){wpS+=x[6];}); var krS=0; kr.forEach(function(x){krS+=x[5];}); var emS=0; em.forEach(function(x){emS+=x[6];});
   var liquid=wpS+krS+emS;
   var realestate=0; rowsB3.forEach(function(x){realestate+=x[3]||0;});
   var sonstige=0; for(r=3;r<5;r++){ sonstige+=num(cell('I2',r,2))||0; }

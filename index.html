@@ -114,6 +114,14 @@ table.alv tfoot td{background:#f3f5f6;border-top:1px solid var(--line-strong);fo
 .acbar{cursor:pointer;border-radius:7px;padding:4px 6px;margin:6px -6px}
 .acbar:hover{background:var(--row-hover)}
 .acbar.on{background:var(--row-hover);box-shadow:inset 0 0 0 1px var(--accent)}
+.erg{padding:4px 16px 12px}
+.erg-h,.erg-r{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:10px;padding:9px 0;align-items:baseline}
+.erg-h{color:var(--ink-2);font-size:12px;border-bottom:1px solid var(--line)}
+.erg-h span+span,.erg-r span+span{text-align:right;font-variant-numeric:tabular-nums}
+.erg-r{border-bottom:1px solid var(--grid-line);font-size:14px}
+.erg-r>span:first-child{color:var(--ink-2)}
+.erg-r.tot{font-weight:700;border-bottom:0;border-top:2px solid var(--line-strong);font-size:15px;padding-top:11px}
+.erg .pos{color:var(--pos)}.erg .neg{color:var(--neg)}
 .note-card .vp{display:inline-block;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--crit);background:#fef3e8;border:1px solid #f3cda6;border-radius:999px;padding:2px 9px;margin-bottom:10px}
 .note-card p{font-size:14px;color:var(--ink-2);line-height:1.6;margin:.3em 0}
 .calc{display:grid;grid-template-columns:1fr 1fr;gap:16px}
@@ -742,12 +750,21 @@ var ERP_CFG={
     var months={}; allTx.forEach(function(t){ var mk=String(t.datum||"").slice(0,7); if(/^\d{4}-\d{2}$/.test(mk)) months[mk]=1; });
     var mkeys=Object.keys(months).sort().reverse(), selM=acFilter.month||"";
     var txM=selM?allTx.filter(function(t){return String(t.datum||"").slice(0,7)===selM;}):allTx;
-    var out=0,inc=0,umb=0,bycat={};
-    txM.forEach(function(t){ if(/^Umbuchung/i.test(t.kat)){ umb+=t.betrag; return; } if(t.betrag<0){ out+=t.betrag; var k=t.kat||"Unklar"; bycat[k]=(bycat[k]||0)+t.betrag; } else inc+=t.betrag; });
+    var einMit=0,einOhne=0,ausMit=0,ausOhne=0,bycat={};
+    txM.forEach(function(t){ var u=/^Umbuchung/i.test(t.kat);
+      if(t.betrag>=0){ einMit+=t.betrag; if(!u) einOhne+=t.betrag; }
+      else { ausMit+=t.betrag; if(!u){ ausOhne+=t.betrag; var k=t.kat||"Unklar"; bycat[k]=(bycat[k]||0)+t.betrag; } } });
+    var ergMit=einMit+ausMit, ergOhne=einOhne+ausOhne, out=ausOhne;
+    function sgn(n){ return (n>0?"+":"")+eur(n,2); }
     var h='<div class="acfilterbar"><span class="fl">Monat</span><select id="acmonth"><option value=""'+(!selM?' selected':'')+'>Alle Monate</option>';
     mkeys.forEach(function(mk){ h+='<option value="'+mk+'"'+(mk===selM?' selected':'')+'>'+esc(acMonthLabel(mk))+'</option>'; });
     h+='</select>'+(acFilter.kat?'<span class="acchip">'+esc(acFilter.kat)+' <button class="acchipx" data-acclear="1" title="Filter entfernen">✕</button></span>':'')+'</div>';
-    h+='<section class="tiles">'+tile("Ausgaben",eur(out,0),"ohne Umbuchungen","big")+tile("Eingänge",eur(inc,0),"Gehalt, Erstattungen …")+tile("Umbuchungen",eur(umb,0),"zwischen eigenen Konten")+tile("Buchungen",txM.length,selM?acMonthLabel(selM):"im Journal")+'</section>';
+    h+='<div class="panel"><div class="alv-bar"><h2>Ergebnis'+(selM?' · '+esc(acMonthLabel(selM)):'')+'</h2><span class="sp"></span><span class="count">'+txM.length+' Buchungen</span></div><div class="erg">'
+      +'<div class="erg-h"><span></span><span>mit Umbuchungen</span><span>ohne Umbuchungen</span></div>'
+      +'<div class="erg-r"><span>Einnahmen</span><span class="pos">'+sgn(einMit)+'</span><span class="pos">'+sgn(einOhne)+'</span></div>'
+      +'<div class="erg-r"><span>Ausgaben</span><span class="neg">'+eur(ausMit,2)+'</span><span class="neg">'+eur(ausOhne,2)+'</span></div>'
+      +'<div class="erg-r tot"><span>Ergebnis</span><span class="'+(ergMit>=0?'pos':'neg')+'">'+sgn(ergMit)+'</span><span class="'+(ergOhne>=0?'pos':'neg')+'">'+sgn(ergOhne)+'</span></div>'
+      +'</div></div>';
     var cats=Object.keys(bycat).sort(function(a,b){return bycat[a]-bycat[b];}), mx=1; cats.forEach(function(k){mx=Math.max(mx,Math.abs(bycat[k]));});
     h+='<div class="panel"><div class="alv-bar"><h2>Ausgaben je Kategorie</h2><span class="muted" style="font-size:12px;margin-left:6px">(klick = filtern)</span><span class="sp"></span><span class="count">'+eur(out,0)+'</span></div><div style="padding:14px 16px 16px">';
     if(cats.length) cats.forEach(function(k){ var val=bycat[k],w=Math.max(1.5,Math.abs(val)/mx*100),on=acFilter.kat===k; h+='<div class="bar-row acbar'+(on?' on':'')+'" data-ackat="'+esc(k)+'"><div class="bl">'+esc(k)+'</div><div class="bt"><div class="bf" style="width:'+w.toFixed(1)+'%"></div></div><div class="bv">'+eur(val,0)+'</div></div>'; });

@@ -695,7 +695,11 @@ var ERP_CFG={
     return out;
   }
   function acIsBoilN26(l){
-    if(/^(IBAN:|BIC:|Erstellt am|Vierteljährlicher|Anmerkung)/.test(l)) return true;
+    if(/^(IBAN:|BIC:|Vierteljährlicher|Anmerkung)/.test(l)) return true;
+    if(/Erstellt am/.test(l)) return true;
+    if(/^Kontoaktivität/.test(l)) return true;
+    if(/^Beschreibung\s+Verbuchungsdatum/.test(l)) return true;
+    if(/^\d{1,3}\s*\/\s*\d{1,3}$/.test(l)) return true;
     if(/Handelsregister|BaFin|USt-ID|Steueridentifika|imprint@|n26\.com|Aufsichtsrat|Vorstand:|Dombret|Charlottenburg|Finanzdienstleistung|Einlagen|Allgemeinen Geschäft|Einwendungen|Rechnungsabschluss|Saldo Deines|Es kann zu|Dein Guthaben|Wir bitten|Werden innerhalb|Du kannst|in Textform/.test(l)) return true;
     if(/^\d{1,2}\.\d{2}\.\d{4}$/.test(l)) return true;
     if(/^\d{1,2}\/\d{4}$/.test(l)) return true;
@@ -703,26 +707,34 @@ var ERP_CFG={
     if(/\d{5}\s+[A-ZÄÖÜ][a-zäöüß]/.test(l)) return true;
     return false;
   }
+  var AC_N26_TYPES={"Gutschriften":"Gutschrift","Gutschrift":"Gutschrift","Lastschriften":"Lastschrift","Lastschrift":"Lastschrift","Belastungen":"Überweisung","Überweisungen":"Überweisung","Überweisung":"Überweisung","Dauerauftrag":"Dauerauftrag","Daueraufträge":"Dauerauftrag","Übertrag":"Umbuchung","Umbuchung":"Umbuchung","Tilgung":"Umbuchung","Gebühren":"Gebühr","Gebühr":"Gebühr"};
   function acParseN26(text,konto,bkr,learned){
-    /* N26-PDF (pdf.js): je Buchung „<Empfänger> <Datum> <Betrag>€" in EINER Zeile,
-       darunter Typ-Zeile (Mastercard•…/Lastschriften/Übertrag…) + evtl. Verwendungszweck, Ende „Wertstellung …". */
+    /* Zwei N26-PDF-Layouts (pdf.js gruppiert Zeilen per y-Koordinate):
+       A) Gemeinschaftskonto: „<Empfänger> <Datum> <Betrag>€" in EINER Zeile, darunter Typ + Zweck.
+       B) Kontoauszug (z.B. Marbella): „<Datum> <Betrag>€" allein — Empfänger steht in der Zeile DARÜBER,
+          darunter Typ-Zeile (Gutschriften/Lastschriften/Belastungen) + Zweck.
+       Beide enden mit „Wertstellung …". */
     var raw=text.replace(/\r/g,"").split("\n").map(function(l){return l.trim();});
     var clean=[]; for(var i=0;i<raw.length;i++){ if(raw[i]&&!acIsBoilN26(raw[i])) clean.push(raw[i]); }
     var mainRe=/^(.*?)(\d{2})\.(\d{2})\.(\d{4})\s+([+-][\d.]+,\d{2})€$/;
+    function isTypeLine(s){ return /^Mastercard/.test(s)||AC_N26_TYPES.hasOwnProperty(s); }
+    function looksName(s){ return !!s && !mainRe.test(s) && s.indexOf("Wertstellung")!==0 && !isTypeLine(s); }
     var out=[];
     for(var j=0;j<clean.length;j++){ var m=clean[j].match(mainRe); if(!m) continue;
-      var desc=(m[1]||"").trim(), datum=m[4]+"-"+m[3]+"-"+m[2], betrag=acDeNum(m[5]);
-      var typline="", extra=[];
-      for(var k=j+1;k<clean.length;k++){ var nx=clean[k]; if(mainRe.test(nx)||nx.indexOf("Wertstellung")===0) break; if(!typline) typline=nx; else extra.push(nx); }
-      var zweck=extra.join(" "),typ,n26cat="";
-      if(/^Mastercard/.test(typline)){ typ="Kartenzahlung"; if(typline.indexOf("•")>=0) n26cat=typline.split("•").pop().trim(); }
-      else if(typline==="Lastschriften") typ="Lastschrift";
-      else if(typline==="Gutschriften") typ="Gutschrift";
-      else if(typline==="Belastungen") typ="Überweisung";
-      else if(typline==="Übertrag"||typline==="Umbuchung"||typline==="Tilgung") typ="Umbuchung";
-      else typ=typline;
-      if(!desc) desc=typline;
-      out.push({datum:datum,konto:konto,empf:desc,zweck:zweck,betrag:betrag,kat:acCategorize(desc,zweck,typ,n26cat,learned),typ:typ,bkr:bkr});
+      var datum=m[4]+"-"+m[3]+"-"+m[2], betrag=acDeNum(m[5]);
+      var empf=(m[1]||"").trim();
+      if(!empf){ var prev=j>0?clean[j-1]:""; if(looksName(prev)) empf=prev; } /* Layout B: Empfänger steht darüber */
+      var fwd=[];
+      for(var k=j+1;k<clean.length;k++){ var nx=clean[k]; if(mainRe.test(nx)||nx.indexOf("Wertstellung")===0) break; fwd.push(nx); }
+      var typ="", n26cat="", zweckArr=fwd;
+      if(fwd.length){ var f0=fwd[0];
+        if(/^Mastercard/.test(f0)){ typ="Kartenzahlung"; if(f0.indexOf("•")>=0) n26cat=f0.split("•").pop().trim(); zweckArr=fwd.slice(1); }
+        else if(AC_N26_TYPES.hasOwnProperty(f0)){ typ=AC_N26_TYPES[f0]; zweckArr=fwd.slice(1); }
+      }
+      if(!typ) typ=betrag>=0?"Gutschrift":"Lastschrift"; /* keine eigene Typ-Zeile (z.B. N26-Gebühr) */
+      var zweck=zweckArr.join(" ");
+      if(!empf) empf=zweck||typ; /* letzter Fallback statt leer/Typ-Wort */
+      out.push({datum:datum,konto:konto,empf:empf,zweck:zweck,betrag:betrag,kat:acCategorize(empf,zweck,typ,n26cat,learned),typ:typ,bkr:bkr});
     }
     return out;
   }

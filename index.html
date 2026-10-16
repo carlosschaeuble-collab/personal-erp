@@ -726,7 +726,13 @@ var ERP_CFG={
     }
     return out;
   }
-  function acDedupKey(t){ return t.datum+"|"+(Math.round(t.betrag*100)/100).toFixed(2)+"|"+acNorm(t.empf)+"|"+acNorm(t.konto); }
+  function acNormDate(d){ if(d==null)return ""; d=String(d).trim(); var m;
+    if(m=d.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/)) return m[1]+"-"+("0"+m[2]).slice(-2)+"-"+("0"+m[3]).slice(-2);
+    if(m=d.match(/^(\d{1,2})[.\/](\d{1,2})[.\/](\d{4})/)) return m[3]+"-"+("0"+m[2]).slice(-2)+"-"+("0"+m[1]).slice(-2);
+    if(/^\d{5,6}(\.\d+)?$/.test(d)){ var dt=new Date(Date.UTC(1899,11,30)+Math.round(parseFloat(d))*86400000); return dt.toISOString().slice(0,10); }
+    return d.toLowerCase(); }
+  function acDedupNum(x){ if(typeof x==="number")return x; var s=String(x==null?"":x).replace(/[^\d.,\-]/g,""); if(/,\d{1,2}$/.test(s)) s=s.replace(/\./g,"").replace(",","."); else s=s.replace(/,/g,""); var n=parseFloat(s); return isNaN(n)?0:n; }
+  function acDedupKey(t){ return acNormDate(t.datum)+"|"+(Math.round(acDedupNum(t.betrag)*100)/100).toFixed(2)+"|"+acNorm(t.empf)+"|"+acNorm(t.konto); }
   function acAcctMatch(xk,label,bank,konto){ xk=acNorm(xk); if(!xk)return false; var L=acNorm(label),B=acNorm(bank),K=acNorm(konto); return xk===L||xk===K||xk===B||(K&&xk.indexOf(K)>=0)||(B&&xk.indexOf(B)>=0)||(L&&L.indexOf(xk)>=0); }
   var PDFJS_V="3.11.174";
   function loadPdfJs(){ return new Promise(function(res,rej){ if(window.pdfjsLib){res(window.pdfjsLib);return;} var s=document.createElement("script"); s.src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/"+PDFJS_V+"/pdf.min.js"; s.onload=function(){ try{ window.pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/"+PDFJS_V+"/pdf.worker.min.js"; }catch(e){} res(window.pdfjsLib); }; s.onerror=function(){ rej(new Error("pdf.js nicht ladbar")); }; document.head.appendChild(s); }); }

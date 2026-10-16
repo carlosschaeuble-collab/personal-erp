@@ -696,6 +696,40 @@ var ERP_CFG={
     }
     return out;
   }
+  function acSplit(line,delim){ var o=[],c="",q=false; for(var i=0;i<line.length;i++){ var ch=line[i]; if(ch==='"'){ if(q&&line[i+1]==='"'){c+='"';i++;} else q=!q; } else if(ch===delim&&!q){ o.push(c); c=""; } else c+=ch; } o.push(c); return o; }
+  function acSpkDate(d){ d=String(d||"").trim(); var m=d.match(/^(\d{1,2})\.(\d{1,2})\.(\d{2,4})$/); if(!m) return d; var y=m[3]; if(y.length===2) y="20"+y; return y+"-"+("0"+m[2]).slice(-2)+"-"+("0"+m[1]).slice(-2); }
+  function acSpkName(s){ return String(s).toLowerCase().replace(/(^|[\s\-\/.])([a-zäöü])/g,function(_,p,c){return p+c.toUpperCase();}); }
+  function acSpkTyp(bt){ bt=String(bt||"").toUpperCase();
+    if(/KARTE|KARTENZAHLUNG/.test(bt)) return "Kartenzahlung";
+    if(/UEBERTRAG|UMBUCHUNG/.test(bt)) return "Umbuchung";
+    if(/WIEDERGUTSCHRIFT/.test(bt)) return "Gutschrift";
+    if(/LASTSCHRIFT/.test(bt)) return "Lastschrift";
+    if(/LOHN|GEHALT/.test(bt)) return "Gutschrift";
+    if(/GUTSCHR|ECHTZEIT-GUTSCHRIFT/.test(bt)) return "Gutschrift";
+    if(/DAUERAUFTRAG/.test(bt)) return "Dauerauftrag";
+    if(/UEBERWEISUNG/.test(bt)) return "Überweisung";
+    if(/BARGELD/.test(bt)) return "Bargeld";
+    if(/ENTGELT|ABSCHLUSS|RECHNUNG/.test(bt)) return "Gebühr";
+    return bt?acSpkName(bt):""; }
+  function acParseSparkasse(text,konto,bkr,learned){
+    /* Sparkasse-CSV (CAMT, Semikolon, Felder in \"…\"): Spalten Buchungstag·Buchungstext·Verwendungszweck·Beguenstigter/Zahlungspflichtiger·Betrag. */
+    var lines=text.replace(/\r/g,"").split("\n").filter(function(l){return l.trim();});
+    if(!lines.length) return [];
+    function strip(s){ return String(s==null?"":s).replace(/^"|"$/g,"").trim(); }
+    var head=acSplit(lines[0],";").map(strip);
+    function H(re){ for(var i=0;i<head.length;i++) if(re.test(head[i])) return i; return -1; }
+    var iDat=H(/^Buchungstag$/i),iBt=H(/^Buchungstext$/i),iZw=H(/^Verwendungszweck$/i),iEmpf=H(/Beguenstigter|Zahlungspflichtiger/i),iBetr=H(/^Betrag$/i);
+    if(iDat<0)iDat=1; if(iBt<0)iBt=3; if(iZw<0)iZw=4; if(iEmpf<0)iEmpf=11; if(iBetr<0)iBetr=14;
+    var out=[];
+    for(var r=1;r<lines.length;r++){ var f=acSplit(lines[r],";").map(strip); if(f.length<=iBetr) continue;
+      var betr=acDeNum(f[iBetr]); if(!betr) continue; /* 0,00-Abschlusszeilen überspringen */
+      var bt=f[iBt]||"", empf=f[iEmpf]||"", zweck=(f[iZw]||"").replace(/\s+/g," ").trim();
+      var typ=acSpkTyp(bt);
+      if(!empf) empf=bt?acSpkName(bt):(zweck||"—");
+      out.push({datum:acSpkDate(f[iDat]),konto:konto,empf:empf,zweck:zweck,betrag:betr,kat:acCategorize(empf,zweck,typ,"",learned),typ:typ,bkr:bkr});
+    }
+    return out;
+  }
   function acIsBoilN26(l){
     if(/^(IBAN:|BIC:|Vierteljährlicher|Anmerkung)/.test(l)) return true;
     if(/Erstellt am/.test(l)) return true;
@@ -806,7 +840,13 @@ var ERP_CFG={
     toast("Lese "+file.name+" …");
     var done=function(tx){ tx.forEach(function(t){t.quelle=quelle;}); if(!tx.length){ toast("Keine Buchungen erkannt.",true); return; } acShowReview(tx,label,oi); };
     if(/\.pdf$/.test(nm)){ file.arrayBuffer().then(function(b){ return pdfToText(b); }).then(function(txt){ done(acParseN26(txt,label,bkr,learned)); }).catch(function(e){ toast("✗ PDF-Fehler: "+(e.message||e),true); }); }
-    else { file.text().then(function(txt){ done(acParseRevolut(txt,label,bkr,learned)); }).catch(function(e){ toast("✗ CSV-Fehler: "+(e.message||e),true); }); }
+    else { file.arrayBuffer().then(function(buf){
+        var u8=new Uint8Array(buf), txt;
+        try{ txt=new TextDecoder("utf-8",{fatal:true}).decode(u8); }catch(e){ txt=new TextDecoder("windows-1252").decode(u8); } /* Sparkasse-CSV ist oft Latin-1 */
+        var head0=(txt.split(/\r?\n/)[0]||"");
+        if(/Buchungstag|Auftragskonto|Beguenstigter/i.test(head0)) done(acParseSparkasse(txt,label,bkr,learned));
+        else done(acParseRevolut(txt,label,bkr,learned));
+      }).catch(function(e){ toast("✗ CSV-Fehler: "+(e.message||e),true); }); }
     inp.value="";
   }
   function acShowReview(tx,label,oi){

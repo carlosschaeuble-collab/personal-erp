@@ -33,12 +33,12 @@ body{font-family:var(--font);color:var(--ink);-webkit-font-smoothing:antialiased
 .livechip{font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:#cdd8e1;border:1px solid var(--shell-line);border-radius:999px;padding:3px 10px;background:none;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
 .livechip:hover{background:#ffffff1a}
 .livechip .d{width:7px;height:7px;border-radius:50%;background:#4ad07d;display:inline-block}
-.tabs{display:flex;align-items:stretch;gap:2px;background:var(--surface);border-bottom:1px solid var(--line);padding:0 8px;overflow:visible}
+.tabs{display:flex;align-items:stretch;gap:1px;background:var(--surface);border-bottom:1px solid var(--line);padding:0 10px;overflow:visible}
 .tab{position:relative}
-.tab>.lbl{display:flex;align-items:center;gap:5px;height:42px;padding:0 13px;font-size:13px;color:var(--ink-2);cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap}
-.tab:hover>.lbl{color:var(--ink)}
-.tab.active>.lbl{color:var(--accent-ink);border-bottom-color:var(--accent);font-weight:500}
-.tab .caret{font-size:9px;color:var(--ink-3)}
+.tab>.lbl{display:flex;align-items:center;height:44px;padding:0 14px;font-size:13px;letter-spacing:.005em;color:var(--ink-2);cursor:pointer;border-bottom:2.5px solid transparent;border-radius:7px 7px 0 0;white-space:nowrap;transition:color .13s ease,background .13s ease}
+.tab>.lbl:hover{color:var(--ink);background:var(--row-hover)}
+.tab.active>.lbl{color:var(--accent-ink);border-bottom-color:var(--accent);font-weight:600}
+.tab .caret{display:none}
 .flyout{position:absolute;top:100%;left:0;min-width:240px;background:var(--surface);border:1px solid var(--line);box-shadow:0 8px 20px rgba(29,45,59,.14);border-radius:0 0 8px 8px;padding:6px;display:none;z-index:60}
 .tab:hover>.flyout{display:block}
 .flyout a{display:block;padding:7px 10px;font-size:13px;color:var(--ink);text-decoration:none;border-radius:5px;white-space:nowrap;cursor:pointer}
@@ -282,7 +282,7 @@ var ERP_CFG={
     nav.forEach(function(t){
       var tab=document.createElement("div"); tab.className="tab"; tab.dataset.code=t.code;
       var kids=t.children||[];
-      tab.innerHTML='<div class="lbl" data-go="'+t.code+'">'+esc(SHORT[t.code]||t.label)+(kids.length?' <span class="caret">▾</span>':'')+'</div>';
+      tab.innerHTML='<div class="lbl" data-go="'+t.code+'">'+esc(SHORT[t.code]||t.label)+'</div>';
       if(kids.length){
         var fly=document.createElement("div"); fly.className="flyout"; var html="",lastG=null;
         kids.forEach(function(ch){

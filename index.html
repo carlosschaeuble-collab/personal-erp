@@ -640,11 +640,10 @@ var ERP_CFG={
     var aus=0; tx.forEach(function(x){ if(x.betrag<0)aus+=x.betrag; });
     var h=head(t.label, (SHORT['C']||"Detmold")+' · Übersicht');
     h+='<section class="tiles">'+tile("Kosten (Ist)",eur(aus,0),tx.length+" Belege im Journal","big")+'</section>';
-    var cards=[['C1','Kostenübersicht','Alle gebuchten Kosten – ausgewertet nach Begünstiger & Kategorie'],
-               ['C2',(byCode['C2']&&byCode['C2'].label)||'Rechnung',(byCode['C2']&&byCode['C2'].desc)||'Monatliche Kostenaufstellung'],
-               ['CBUCH','Hauptbuchbelege buchen','Neue Kosten direkt einbuchen → landen im Journal & hier in der Übersicht']];
+    var OV={C1:['Kostenübersicht','Alle gebuchten Kosten – ausgewertet nach Begünstiger & Kategorie'],CBUCH:['Hauptbuchbelege buchen','Neue Kosten direkt einbuchen → landen im Journal & hier in der Übersicht']};
     h+='<div class="gcards">';
-    cards.forEach(function(c){ h+='<div class="gcard" data-go="'+c[0]+'"><span class="code">'+esc(c[0]==='CBUCH'?'＋ Buchen':c[0])+'</span><h3>'+esc(c[1])+'</h3><p>'+esc(c[2])+'</p></div>'; });
+    (t.children||[]).forEach(function(ch){ var o=OV[ch.code], label=o?o[0]:(SHORT[ch.code]||ch.label||ch.code), desc=o?o[1]:(ch.desc||''), badge=ch.code==='CBUCH'?'＋ Buchen':ch.code;
+      h+='<div class="gcard" data-go="'+ch.code+'"><span class="code">'+esc(badge)+'</span><h3>'+esc(label)+'</h3><p>'+esc(desc)+'</p></div>'; });
     h+='</div>'; return h;
   }
   function buchenHTML(){

@@ -671,8 +671,28 @@ var ERP_CFG={
     var rows=v.rows;
     var total=0; rows.forEach(function(r){total+=(Number(r[3])||0);});
     var maxAbs=1; rows.forEach(function(r){maxAbs=Math.max(maxAbs,Math.abs(Number(r[3])||0));});
+    // Kacheln: Gruppierung nach Konto-ID (Fallback: Bank-Name)
+    function nid(s){ return String(s==null?"":s).toUpperCase().replace(/[^A-Z0-9]/g,""); }
+    var CASH_GROUPS=[
+      {label:"Daily Cash", codes:["REV","N26-DE","PAYP","SPK"]},
+      {label:"Investment-Kapital", codes:["TR","SC"]}
+    ];
+    var CODE_ALIAS={"REV":/revolut/i,"N26-DE":/n26/i,"PAYP":/paypal/i,"SPK":/sparkasse/i,"TR":/trade\s*rep/i,"SC":/scalab/i};
+    CASH_GROUPS.forEach(function(g){ g.cset={}; g.codes.forEach(function(c){ g.cset[nid(c)]=1; }); g.sum=0; g.n=0; });
+    function groupOf(r){
+      var k=nid(r[0]);
+      for(var i=0;i<CASH_GROUPS.length;i++){ if(CASH_GROUPS[i].cset[k]) return CASH_GROUPS[i]; }           // 1) ID-Treffer
+      var bank=String(r[1]||""), hay=bank+" "+String(r[2]||"");
+      for(var j=0;j<CASH_GROUPS.length;j++){ var g=CASH_GROUPS[j];
+        for(var c=0;c<g.codes.length;c++){ var code=g.codes[c], re=CODE_ALIAS[code];
+          if(re&&re.test(bank)){ if(code==="N26-DE"&&/marbella/i.test(hay)) continue; return g; } } }      // 2) Name-Fallback (N26-DE ohne Marbella)
+      return null;
+    }
+    rows.forEach(function(r){ var g=groupOf(r); if(g){ g.sum+=(Number(r[3])||0); g.n++; } });
     var h='<div class="crumb">Global Cash</div><div class="page-head"><h1>Global Cash</h1><span class="muted" style="font-size:12.5px;margin-left:4px">'+rows.length+' Konten</span><span style="flex:1"></span><button class="editbtn" data-edit="F">✎ Bearbeiten</button></div>';
-    h+='<section class="tiles">'+tile("Gesamtsaldo",eur(total),"Alle Bankkonten + Verrechnung","big")+tile("Konten",rows.length,"mit Beteiligung Carlos")+'</section>';
+    h+='<section class="tiles">'+tile("Gesamtsaldo",eur(total),"Alle Bankkonten + Verrechnung","big");
+    CASH_GROUPS.forEach(function(g){ h+=tile(g.label, eur(g.sum), g.codes.join(" · ")+" · "+g.n+(g.n===1?" Konto":" Konten")); });
+    h+='</section>';
     h+='<div class="panel"><div class="alv-bar"><h2>Bankkonten</h2><span class="count">'+rows.length+'</span></div><div class="alv-wrap"><table class="alv"><thead><tr><th>ID</th><th>Bank</th><th>Konto</th><th>Bkr</th><th class="num">Saldo (€)</th><th style="width:150px">Anteil</th></tr></thead><tbody>';
     var sorted=rows.map(function(r,i){return {r:r,oi:i};}).sort(function(a,b){return (Number(b.r[3])||0)-(Number(a.r[3])||0);});
     sorted.forEach(function(it){ var r=it.r, stand=Number(r[3])||0, w=Math.max(2,Math.abs(stand)/maxAbs*100), neg=stand<0;

@@ -327,8 +327,8 @@ var ERP_CFG={
   tabsEl.addEventListener("click",function(e){ var g=e.target.closest("[data-go]"); if(g) go(g.dataset.go); });
   var cur=null, curObj=null, sortState={}, editState={}, AC=[], ACATS=[], ACDOCA_CATLIST=[], ACDOCA_USERRULES=[], acFilter={month:"",kat:""}, mkFilter={};
   var BUCHCFG={
-    CBUCH:{stream:"Detmold",back:"C",after:"C1",konto:"Hauptbuch Detmold",bkr:"1000"},
-    H1BUCH:{stream:"Marbella",back:"H",after:"H1.2",konto:"Hauptbuch Marbella",bkr:"2020"},
+    CBUCH:{stream:"Detmold",back:"C",after:"C1",konto:"Hauptbuch Detmold",bkr:"1020"},
+    H1BUCH:{stream:"Marbella",back:"H",after:"H1.2",konto:"Hauptbuch Marbella",bkr:"2010"},
     H2BUCH:{stream:"OWL-Vermietung",back:"H",after:"H",konto:"Hauptbuch OWL-Vermietung",bkr:"2020"},
     H3BUCH:{stream:"Industrial",back:"H",after:"H",konto:"Hauptbuch Industrial",bkr:"2030"}
   };
@@ -759,14 +759,13 @@ var ERP_CFG={
     var begMap={}; tx.forEach(function(x){ if(x.empf&&x.kat&&x.kat!=="Unklar") begMap[x.empf]=x.kat; }); window.__BK_BEGMAP=begMap;
     var begs=Object.keys(begMap).sort(function(a,b){return a.localeCompare(b);});
     var cats=(ACDOCA_CATLIST.length?ACDOCA_CATLIST.slice():ACDOCA_CATS.slice()); ACATS.forEach(function(c){ if(cats.indexOf(c)<0) cats.push(c); }); if(cats.indexOf("Unklar")<0) cats.push("Unklar");
-    var bkrs={}; AC.forEach(function(x){ if(x.bkr)bkrs[String(x.bkr)]=1; }); ((V['F']&&V['F'].rows)||[]).forEach(function(r){ if(r[4])bkrs[String(r[4])]=1; }); Object.keys(BUCHCFG).forEach(function(k){ if(BUCHCFG[k].bkr)bkrs[BUCHCFG[k].bkr]=1; });
-    var bkrList=Object.keys(bkrs).sort();
+    var bkMap=(D&&D.bkr)||{}, bkKeys=Object.keys(bkMap).sort(); if(cfg.bkr&&bkKeys.indexOf(cfg.bkr)<0) bkKeys.unshift(cfg.bkr);
     var today=new Date().toISOString().slice(0,10);
     var h='<div class="crumb" data-go="'+cfg.back+'" style="cursor:pointer">‹ '+esc(streamLbl)+'</div><div class="page-head"><h1>'+esc(t.label)+'</h1></div>';
     h+='<div class="panel"><div style="padding:18px"><div class="bform">';
     h+='<div class="two"><div class="row"><label>Datum</label><input type="date" id="bk_datum" value="'+today+'"></div><div class="row"><label>Betrag (€)</label><input id="bk_betrag" inputmode="text" placeholder="-123,45  ·  minus = Ausgabe"></div></div>';
     h+='<div class="row"><label>Begünstiger</label><input id="bk_empf" list="bk_begs" placeholder="z. B. Firma / Person"><datalist id="bk_begs">'+begs.map(function(b){return '<option value="'+esc(b)+'">';}).join('')+'</datalist></div>';
-    h+='<div class="two"><div class="row"><label>Kategorie</label><select id="bk_kat">'+cats.map(function(c){return '<option>'+esc(c)+'</option>';}).join('')+'</select></div><div class="row"><label>Buchungskreis</label><input id="bk_bkr" list="bk_bkrs" value="'+esc(cfg.bkr)+'" placeholder="z. B. 2020"><datalist id="bk_bkrs">'+bkrList.map(function(b){return '<option value="'+esc(b)+'">';}).join('')+'</datalist></div></div>';
+    h+='<div class="two"><div class="row"><label>Kategorie</label><select id="bk_kat">'+cats.map(function(c){return '<option>'+esc(c)+'</option>';}).join('')+'</select></div><div class="row"><label>Buchungskreis</label><select id="bk_bkr">'+bkKeys.map(function(k){ var nm=bkMap[k]&&bkMap[k].name; return '<option value="'+esc(k)+'"'+(k===cfg.bkr?' selected':'')+'>'+esc(k+(nm?' – '+nm:''))+'</option>'; }).join('')+'</select></div></div>';
     h+='<div class="row"><label>Verwendungszweck <span class="muted" style="font-weight:400">(optional)</span></label><input id="bk_zweck" placeholder="z. B. Rechnung Nr. …"></div>';
     h+='<div style="display:flex;gap:12px;align-items:center;margin-top:6px"><button class="editbtn on" data-buchen="'+esc(code)+'">Beleg buchen</button><span class="muted" style="font-size:12px">→ ACDOCA-Journal · Objekt/Stream = '+esc(streamLbl)+'</span></div>';
     h+='</div></div></div>';

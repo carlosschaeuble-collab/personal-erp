@@ -94,8 +94,8 @@ table.alv tfoot td{background:#f3f5f6;border-top:1px solid var(--line-strong);fo
 .cg-meta{display:flex;flex-wrap:wrap;gap:6px 20px;margin:0 0 16px;font-size:12.5px;color:var(--ink-2)}
 .cg-meta b{color:var(--ink);font-weight:600}
 .alv th.grp{text-align:center;color:var(--ink-2);font-size:11px;letter-spacing:.04em;text-transform:uppercase;font-weight:600}
-table.alv.cg thead th{font-weight:700;color:var(--ink)}
-table.alv.cg tfoot td{font-weight:700;color:var(--ink)}
+table.alv.cg thead th,table.alv.guv thead th{font-weight:700;color:var(--ink)}
+table.alv.cg tfoot td,table.alv.guv tfoot td{font-weight:700;color:var(--ink)}
 .alv th .sub2{display:block;font-weight:400;font-size:10px;color:var(--ink-3);text-transform:none;letter-spacing:0;margin-top:1px}
 .alv .gsep{border-left:1px solid var(--line-strong)}
 .alv .bold{font-weight:600}
@@ -528,9 +528,9 @@ var ERP_CFG={
     var keys=["monat","tage","umsatz","eur_nacht","fee","iva","tfee","rep","neb","adj","son","ebit","est","gewinn"];
     var numc=[1,2,3,4,5,6,7,8,9,10,11,12,13];
     var years={}; v.months.forEach(function(m){ (years[m.jahr]=years[m.jahr]||[]).push(m); });
-    Object.keys(years).forEach(function(y){
+    Object.keys(years).sort(function(a,b){return (parseInt(b,10)||0)-(parseInt(a,10)||0);}).forEach(function(y){
       var ms=years[y], sums={};
-      h+='<div class="panel"><div class="alv-bar"><h2>Jahr '+y+'</h2></div><div class="alv-wrap"><table class="alv"><thead><tr>';
+      h+='<div class="panel"><div class="alv-bar"><h2>Jahr '+y+'</h2></div><div class="alv-wrap"><table class="alv guv"><thead><tr>';
       cols.forEach(function(c,i){ h+='<th class="'+(numc.indexOf(i)>=0?'num':'')+'">'+esc(c)+'</th>'; }); h+='</tr></thead><tbody>';
       ms.forEach(function(m){ h+='<tr>'; keys.forEach(function(k,i){
         var val=m[k];

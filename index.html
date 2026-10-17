@@ -1232,6 +1232,24 @@ var ERP_CFG={
   });
   document.getElementById("page").addEventListener("change",function(e){ if(e.target.id==="acfile"){ acHandleFile(e.target); return; } if(e.target.id==="acmonth"){ acFilter.month=e.target.value; render(); return; } if(e.target.id==="mkyear"){ mkFilter.year=e.target.value; mkFilter.month=""; render(); return; } if(e.target.id==="mkmonth"){ mkFilter.month=e.target.value; render(); return; } if(e.target.id==="bk_empf"){ var m=window.__BK_BEGMAP||{}, k=m[String(e.target.value||"").trim()]; if(k){ var ks=document.getElementById('bk_kat'); if(ks)ks.value=k; } return; } if(e.target.classList.contains("cell-edit")) saveCell(e.target); });
   document.getElementById("page").addEventListener("keydown",function(e){ if(e.target.classList.contains("cell-edit")&&e.key==="Enter"){ e.preventDefault(); e.target.blur(); } });
+  // Jedem Bankkonto (Reiter F) eine stabile ID geben; fehlende werden ins Google-Sheet geschrieben (Spalte A).
+  function newId(){ return (Date.now().toString(36)+Math.random().toString(36).slice(2,7)).slice(0,13); }
+  var __acctIdDone=false;
+  function ensureAccountIds(){
+    if(__acctIdDone) return;
+    if(!window.__SHEET_IDS||!window.ERP_write||!window.__SHEETS) return;   // nur echter, angemeldeter Modus (kein Mock, kein Offline)
+    var F=window.__SHEETS['F']; if(!F||!F.length) return;
+    var todo=[];
+    for(var r=1;r<F.length;r++){ var row=F[r]||[]; var bank=row[1]; if(bank==null||String(bank).trim()===""||String(bank).trim()==="Summe") continue; if(row[0]!=null&&String(row[0]).trim()!=="") continue; todo.push(r); }
+    if(!todo.length){ __acctIdDone=true; return; }
+    __acctIdDone=true;   // sofort sperren → keine Doppelvergabe bei Re-Render
+    var writes=todo.map(function(r){ var id=newId(); (F[r]||(F[r]=[]))[0]=id; return {a1:"'F'!A"+(r+1),id:id}; });
+    var n=writes.length, suf=n>1?"s":"";
+    toast("Vergebe "+n+" Konto-ID"+suf+"…");
+    Promise.all(writes.map(function(w){ return window.ERP_write(w.a1,w.id); }))
+      .then(function(){ toast("✓ "+n+" Konto-ID"+suf+" ergänzt & ins Sheet geschrieben"); if(window.__SHEETS) boot(parseSheets(window.__SHEETS),cur); })
+      .catch(function(e){ __acctIdDone=false; toast("✗ ID-Vergabe fehlgeschlagen: "+(e.message||e),true); });
+  }
   function boot(data, keepTab){
     D=data; nav=D.nav; V=D.views; K=D.kpis; AC=D.acdoca||[]; ACATS=D.acats||[];
     if(D.brand){ var bn=document.getElementById('brandName'); if(bn)bn.textContent=D.brand; try{document.title=D.brand+" · Personal ERP";}catch(e){} }
@@ -1239,6 +1257,7 @@ var ERP_CFG={
     ACDOCA_USERRULES=(D.cats||[]).map(function(c){ var kw=(c.keywords||[]).map(function(k){return k.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");}); return kw.length?[new RegExp(kw.join("|"),"i"),c.kat]:null; }).filter(Boolean);
     byCode={}; nav.forEach(function(t){byCode[t.code]=t;(t.children||[]).forEach(function(ch){byCode[ch.code]=ch;});});
     sortState={}; buildTabs(); go(keepTab||"A");
+    ensureAccountIds();
   }
   window.ERP={boot:boot,toast:toast};
 })();

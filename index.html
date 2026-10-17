@@ -207,9 +207,10 @@ table.alv thead th .sort{color:var(--accent);font-size:9px;margin-left:3px}
 .editbtn.on{background:var(--accent);color:#fff;border-color:var(--accent)}
 .edit-hint{font-size:12px;color:var(--accent-ink);background:#eef6ff;padding:7px 12px;border-bottom:1px solid var(--line)}
 table.alv td.edit-td{padding:3px 6px}
-table.alv input.cell-edit{width:100%;min-width:70px;box-sizing:border-box;border:1px solid #cfe0f5;border-radius:4px;padding:4px 6px;font:inherit;font-size:13px;background:#fbfdff;color:var(--ink)}
-table.alv input.cell-edit:focus{outline:2px solid #bcd7fb;border-color:var(--accent)}
-table.alv input.cell-edit:disabled{opacity:.5}
+table.alv input.cell-edit,table.alv select.cell-edit{width:100%;min-width:70px;box-sizing:border-box;border:1px solid #cfe0f5;border-radius:4px;padding:4px 6px;font:inherit;font-size:13px;background:#fbfdff;color:var(--ink)}
+table.alv select.cell-edit{min-width:120px;cursor:pointer}
+table.alv input.cell-edit:focus,table.alv select.cell-edit:focus{outline:2px solid #bcd7fb;border-color:var(--accent)}
+table.alv input.cell-edit:disabled,table.alv select.cell-edit:disabled{opacity:.5}
 .toast{position:fixed;bottom:40px;left:50%;transform:translateX(-50%);background:#1d2d3b;color:#fff;font-size:13px;padding:9px 16px;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.2);z-index:200;opacity:0;transition:opacity .2s;pointer-events:none}
 .toast.show{opacity:1}
 .toast.err{background:var(--neg)}
@@ -378,6 +379,22 @@ var ERP_CFG={
   var OBJECTABLE={"H2.1":1,"H3.1":1,"B1":1,"F":1,"G":1,"B2":1,"C1":1};
   function editColOf(v,i){ if(!v.src||!v.src.edit)return null; if(v.src.edit==="auto"){ return /^ID/i.test(v.cols[i])?null:i; } for(var j=0;j<v.src.edit.length;j++){ if(v.src.edit[j].c===i)return v.src.edit[j].sc; } return null; }
   function colLetter(n){ var s=""; n=n+1; while(n>0){ var rr=(n-1)%26; s=String.fromCharCode(65+rr)+s; n=Math.floor((n-1)/26);} return s; }
+  // Business-Partner-Namen aus Reiter B1 (für Dropdowns, z. B. Gegenpartei in G)
+  function bpNames(){
+    var v=(typeof V!=="undefined")&&V&&V['B1']; if(!v||!v.rows)return [];
+    var cols=v.cols||[], ni=-1,i; for(i=0;i<cols.length;i++){ if(/^name/i.test(String(cols[i]||""))){ni=i;break;} } if(ni<0)ni=1;
+    var out=[],seen={};
+    v.rows.forEach(function(r){ var nm=String(r[ni]==null?"":r[ni]).trim(); if(nm&&!seen[nm.toLowerCase()]){ seen[nm.toLowerCase()]=1; out.push(nm); } });
+    out.sort(function(a,b){ return a.localeCompare(b,'de'); });
+    return out;
+  }
+  function bpSelect(a1,sheet,srow,scol,val,names){
+    var cur=String(val==null?"":val).trim(), low=cur.toLowerCase(), found=false;
+    var o='<option value=""'+(cur===""?' selected':'')+'>—</option>';
+    names.forEach(function(nm){ var sel=nm.toLowerCase()===low; if(sel)found=true; o+='<option value="'+esc(nm)+'"'+(sel?' selected':'')+'>'+esc(nm)+'</option>'; });
+    if(cur&&!found) o+='<option value="'+esc(cur)+'" selected>'+esc(cur)+' (nicht hinterlegt)</option>';
+    return '<select class="cell-edit" data-a1="'+esc(a1)+'" data-sheet="'+esc(sheet)+'" data-srow="'+srow+'" data-scol="'+scol+'">'+o+'</select>';
+  }
   function gridHTML(v, code){
     var cols=v.cols, money=v.money_idx||[];
     var show=[]; cols.forEach(function(c,i){ if(!/^ID/i.test(c)) show.push(i); });
@@ -402,7 +419,12 @@ var ERP_CFG={
         var val=row[i], isM=money.indexOf(i)>=0, sc=em?editColOf(v,i):null;
         if(em&&sc!=null){
           var a1="'"+v.src.sheet.replace(/'/g,"''")+"'!"+colLetter(sc)+(srcRow+1);
-          h+='<td class="edit-td"><input class="cell-edit" data-a1="'+esc(a1)+'" data-sheet="'+esc(v.src.sheet)+'" data-srow="'+srcRow+'" data-scol="'+sc+'" value="'+esc(val==null?"":val)+'"></td>';
+          var bps=(code==="G"&&/gegenpartei/i.test(String(cols[i]||"")))?bpNames():null;
+          if(bps&&bps.length){
+            h+='<td class="edit-td">'+bpSelect(a1,v.src.sheet,srcRow,sc,val,bps)+'</td>';
+          } else {
+            h+='<td class="edit-td"><input class="cell-edit" data-a1="'+esc(a1)+'" data-sheet="'+esc(v.src.sheet)+'" data-srow="'+srcRow+'" data-scol="'+sc+'" value="'+esc(val==null?"":val)+'"></td>';
+          }
         } else if(v.toggle&&i===v.toggle.col){
           var sr=v.src?v.src.srcRows[it.oi]:null, cv=String(val==null?"":val).toLowerCase(), seg='<span class="seg">';
           v.toggle.options.forEach(function(opt){ var on=cv===String(opt).toLowerCase(); seg+='<button class="seg-b'+(on?' on':'')+'" data-toggle="'+esc(v.src.sheet)+'|'+sr+'|'+i+'" data-tval="'+esc(opt)+'">'+esc(opt)+'</button>'; });

@@ -274,7 +274,7 @@ table.alv input.cell-edit:disabled{opacity:.5}
   <header class="shell sticky" style="z-index:50">
     <div class="brand">
       <img class="cse" src="cse-logo.png" alt="CSE">
-      <b>Don Carlos</b><span>Personal ERP</span>
+      <b id="brandName">Don Carlos</b><span>Personal ERP</span>
     </div>
     <label class="search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input placeholder="Suchen…" aria-label="Suchen"></label>
     <button class="livechip" id="refreshBtn" title="Daten neu laden"><span class="d"></span>Live</button>
@@ -1191,6 +1191,7 @@ var ERP_CFG={
   document.getElementById("page").addEventListener("keydown",function(e){ if(e.target.classList.contains("cell-edit")&&e.key==="Enter"){ e.preventDefault(); e.target.blur(); } });
   function boot(data, keepTab){
     D=data; nav=D.nav; V=D.views; K=D.kpis; AC=D.acdoca||[]; ACATS=D.acats||[];
+    if(D.brand){ var bn=document.getElementById('brandName'); if(bn)bn.textContent=D.brand; try{document.title=D.brand+" · Personal ERP";}catch(e){} }
     ACDOCA_CATLIST=(D.cats||[]).map(function(c){return c.kat;}).filter(Boolean);
     ACDOCA_USERRULES=(D.cats||[]).map(function(c){ var kw=(c.keywords||[]).map(function(k){return k.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");}); return kw.length?[new RegExp(kw.join("|"),"i"),c.kat]:null; }).filter(Boolean);
     byCode={}; nav.forEach(function(t){byCode[t.code]=t;(t.children||[]).forEach(function(ch){byCode[ch.code]=ch;});});
@@ -1211,9 +1212,10 @@ function parseSheets(S){
   function normkey(x){ if(x==null||x==="")return null; var n=parseFloat(x); return isNaN(n)?String(x):String(Math.round(n)); }
   var r,c;
   // nav
-  var nav=[],idx={},st=S['Struktur']||[];
+  var nav=[],idx={},st=S['Struktur']||[],brand="";
   for(r=0;r<st.length;r++){
     var code=cell('Struktur',r,0); if(!code)continue; code=String(code).trim();
+    if(/^(anzeigename|marke|brand|app\s*name)$/i.test(code)){ var bv=cell('Struktur',r,1); if(bv!=null&&String(bv).trim())brand=String(bv).trim(); continue; }
     var label=cell('Struktur',r,1),desc=cell('Struktur',r,2);
     var node={code:code,label:label?String(label):code,desc:desc?String(desc):""};
     if(code.length===1){ node.children=[]; nav.push(node); idx[code]=node; }
@@ -1344,7 +1346,7 @@ function parseSheets(S){
       if(kat) acatsCount[kat]=1;
     }
   })();
-  return {nav:nav,views:views,kpis:kpis,bkr:bkr,acdoca:acdoca,acats:Object.keys(acatsCount),cats:cats};
+  return {nav:nav,views:views,kpis:kpis,bkr:bkr,acdoca:acdoca,acats:Object.keys(acatsCount),cats:cats,brand:brand};
 }
 </script>
 <script>

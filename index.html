@@ -660,7 +660,9 @@ var ERP_CFG={
   }
   function buchungskreiseHTML(v){
     function nk(x){ if(x==null||x==="")return ""; var s=String(x).trim(); var n=parseFloat(s); return isNaN(n)?s:String(Math.round(n)); }
-    var circles=v.rows||[], keySet={}; circles.forEach(function(r){ var k=nk(r[1]); if(k)keySet[k]=r[2]||""; });
+    var cols=v.cols||[]; function colIx(re){ for(var i=0;i<cols.length;i++){ if(re.test(String(cols[i]||"")))return i; } return -1; }
+    var iS=colIx(/schl(ü|ue)ssel/i), iN=colIx(/^\s*name/i), iNo=colIx(/notiz/i); if(iS<0)iS=1; if(iN<0)iN=2; if(iNo<0)iNo=3;
+    var circles=v.rows||[], keySet={}; circles.forEach(function(r){ var k=nk(r[iS]); if(k)keySet[k]=r[iN]||""; });
     var frows=(V['F']&&V['F'].rows)||[], acctBy={};
     frows.forEach(function(r){ var k=nk(r[4]); if(!k)return; (acctBy[k]=acctBy[k]||[]).push(acctLabel(r)); });
     var bkBy={}; AC.forEach(function(x){ var k=nk(x.bkr); if(!k)return; if(!bkBy[k])bkBy[k]={n:0,sum:0}; bkBy[k].n++; bkBy[k].sum+=x.betrag; });
@@ -674,7 +676,7 @@ var ERP_CFG={
     else h+='<div class="empty" style="color:var(--pos)">✓ Alles konsistent — alle verwendeten Buchungskreise sind in B2 definiert, keine erkennbaren Fehlzuordnungen.</div>';
     h+='</div></div>';
     h+='<div class="panel"><div class="alv-bar"><h2>Je Buchungskreis</h2><span class="muted" style="font-size:12px;margin-left:6px">(klick = Details)</span><span class="sp"></span><span class="count">'+circles.length+'</span></div><div class="alv-wrap"><table class="alv"><thead><tr><th>Schlüssel</th><th>Name</th><th>Notiz</th><th class="num">Konten</th><th class="num">Buchungen</th><th class="num">Summe</th></tr></thead><tbody>';
-    circles.forEach(function(r,oi){ var k=nk(r[1]), na=acctBy[k]?acctBy[k].length:0, bb=bkBy[k]||{n:0,sum:0}; h+='<tr data-obj="B2:'+oi+'" style="cursor:pointer"><td class="name">'+esc(r[1])+'</td><td>'+esc(r[2]||"")+'</td><td class="muted">'+esc(r[3]||"")+'</td><td class="num">'+na+'</td><td class="num">'+bb.n+'</td><td class="num">'+eur(bb.sum,0)+'</td></tr>'; });
+    circles.forEach(function(r,oi){ var k=nk(r[iS]), na=acctBy[k]?acctBy[k].length:0, bb=bkBy[k]||{n:0,sum:0}; h+='<tr data-obj="B2:'+oi+'" style="cursor:pointer"><td class="name">'+esc(r[iS])+'</td><td>'+esc(r[iN]||"")+'</td><td class="muted">'+esc(r[iNo]||"")+'</td><td class="num">'+na+'</td><td class="num">'+bb.n+'</td><td class="num">'+eur(bb.sum,0)+'</td></tr>'; });
     h+='</tbody></table></div></div>';
     return h;
   }
@@ -1260,7 +1262,8 @@ function parseSheets(S){
   function gridview(code,title,cols,rows,sum_idx,money_idx,src){ views[code]={kind:"grid",title:title,cols:cols,rows:rows,sum_idx:(sum_idx==null?null:sum_idx),money_idx:money_idx||[],src:src||null}; }
   var e;
   e=extract('B1',2); gridview('B1','Business Partner',e.cols,e.rows,null,null,{sheet:'B1',srcRows:e.srcRows,headerRow:e.headerRow,edit:"auto"});
-  e=extract('B2',2,6); gridview('B2','Buchungskreise',e.cols,e.rows,null,null,{sheet:'B2',srcRows:e.srcRows,headerRow:e.headerRow,edit:"auto"});
+  var hrB2=-1; for(var rb=0;rb<Math.min(maxRow('B2'),12);rb++){ for(var cb=0;cb<8;cb++){ if(/schl(ü|ue)ssel/i.test(String(cell('B2',rb,cb)||""))){ hrB2=rb; break; } } if(hrB2>=0)break; } if(hrB2<0)hrB2=2;
+  e=extract('B2',hrB2); gridview('B2','Buchungskreise',e.cols,e.rows,null,null,{sheet:'B2',srcRows:e.srcRows,headerRow:e.headerRow,edit:"auto"});
   var rowsB3=[],srcB3=[]; for(r=2;r<maxRow('B3');r++){ var a=cell('B3',r,0); if(!a)continue; rowsB3.push([a,cell('B3',r,1),cell('B3',r,2),num(cell('B3',r,3))]); srcB3.push(r); }
   gridview('B3','Immobilienwerte',['Objekt','Ort','Bkr','Wert (€)'],rowsB3,3,[3],{sheet:'B3',srcRows:srcB3,headerRow:1,edit:mapCols(0,4)});
   var rowsF=[],srcF=[]; for(r=1;r<maxRow('F');r++){ var bank=cell('F',r,1); if(!bank||String(bank).trim()==="Summe")continue; rowsF.push([cell('F',r,0),bank,cell('F',r,2),num(cell('F',r,3)),cell('F',r,4),num(cell('F',r,3))]); srcF.push(r); }
@@ -1316,8 +1319,8 @@ function parseSheets(S){
   var arap=0; rowsG.forEach(function(x){arap+=x[8];});
   var kpis={networth:Math.round(cash+liquid+realestate+sonstige+arap),cash:Math.round(cash),liquid:Math.round(liquid),realestate:Math.round(realestate),sonstige:Math.round(sonstige),arap:Math.round(arap),wp:Math.round(wpS),kr:Math.round(krS),em:Math.round(emS)};
   // bkr drilldown
-  var bkr={};
-  for(r=3;r<maxRow('B2');r++){ var sch=cell('B2',r,1),k=normkey(sch); if(k)bkr[k]={schluessel:k,name:cell('B2',r,2)||"",items:[],sum:0}; }
+  var bkr={}, ciS2=-1,ciN2=-1; for(var cb2=0;cb2<10;cb2++){ var hs2=String(cell('B2',hrB2,cb2)||""); if(/schl(ü|ue)ssel/i.test(hs2))ciS2=cb2; else if(/^\s*name/i.test(hs2))ciN2=cb2; } if(ciS2<0)ciS2=1; if(ciN2<0)ciN2=2;
+  for(r=hrB2+1;r<maxRow('B2');r++){ var sch=cell('B2',r,ciS2),k=normkey(sch); if(k)bkr[k]={schluessel:k,name:cell('B2',r,ciN2)||"",items:[],sum:0}; }
   function addItem(key,kind,name,wert){ var k=normkey(key); if(k==null)return; if(!bkr[k])bkr[k]={schluessel:k,name:"",items:[],sum:0}; var w=num(wert)||0; bkr[k].items.push({kind:kind,name:name,wert:round2(w)}); bkr[k].sum=round2(bkr[k].sum+w); }
   rowsF.forEach(function(x){ addItem(x[4],"Bankkonto",((x[1]||"")+" · "+(x[2]||"")).replace(/^ · | · $/,""),x[3]); });
   rowsB3.forEach(function(x){ addItem(x[2],"Immobilie",x[0],x[3]); });

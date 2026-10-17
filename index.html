@@ -952,10 +952,10 @@ var ERP_CFG={
     var months={}; allTx.forEach(function(t){ var mk=String(t.datum||"").slice(0,7); if(/^\d{4}-\d{2}$/.test(mk)) months[mk]=1; });
     var mkeys=Object.keys(months).sort().reverse(), selM=acFilter.month||"";
     var txM=selM?allTx.filter(function(t){return String(t.datum||"").slice(0,7)===selM;}):allTx;
-    var einMit=0,einOhne=0,ausMit=0,ausOhne=0,bycat={};
-    txM.forEach(function(t){ var u=/^Umbuchung/i.test(t.kat);
-      if(t.betrag>=0){ einMit+=t.betrag; if(!u) einOhne+=t.betrag; }
-      else { ausMit+=t.betrag; if(!u){ ausOhne+=t.betrag; var k=t.kat||"Unklar"; bycat[k]=(bycat[k]||0)+t.betrag; } } });
+    var einMit=0,einOhne=0,ausMit=0,ausOhne=0,byIn={},byOut={};
+    txM.forEach(function(t){ var u=/^Umbuchung/i.test(t.kat), k=t.kat||"Unklar";
+      if(t.betrag>=0){ einMit+=t.betrag; if(!u){ einOhne+=t.betrag; byIn[k]=(byIn[k]||0)+t.betrag; } }
+      else { ausMit+=t.betrag; if(!u){ ausOhne+=t.betrag; byOut[k]=(byOut[k]||0)+t.betrag; } } });
     var ergMit=einMit+ausMit, ergOhne=einOhne+ausOhne, out=ausOhne;
     function sgn(n){ return (n>0?"+":"")+eur(n,2); }
     var h='<div class="acfilterbar"><span class="fl">Monat</span><select id="acmonth"><option value=""'+(!selM?' selected':'')+'>Alle Monate</option>';
@@ -967,11 +967,15 @@ var ERP_CFG={
       +'<div class="erg-r"><span>Ausgaben</span><span class="neg">'+eur(ausMit,2)+'</span><span class="neg">'+eur(ausOhne,2)+'</span></div>'
       +'<div class="erg-r tot"><span>Ergebnis</span><span class="'+(ergMit>=0?'pos':'neg')+'">'+sgn(ergMit)+'</span><span class="'+(ergOhne>=0?'pos':'neg')+'">'+sgn(ergOhne)+'</span></div>'
       +'</div></div>';
-    var cats=Object.keys(bycat).sort(function(a,b){return bycat[a]-bycat[b];}), mx=1; cats.forEach(function(k){mx=Math.max(mx,Math.abs(bycat[k]));});
-    h+='<div class="panel"><div class="alv-bar"><h2>Ausgaben je Kategorie</h2><span class="muted" style="font-size:12px;margin-left:6px">(klick = filtern)</span><span class="sp"></span><span class="count">'+eur(out,0)+'</span></div><div style="padding:14px 16px 16px">';
-    if(cats.length) cats.forEach(function(k){ var val=bycat[k],w=Math.max(1.5,Math.abs(val)/mx*100),on=acFilter.kat===k; h+='<div class="bar-row acbar'+(on?' on':'')+'" data-ackat="'+esc(k)+'"><div class="bl">'+esc(k)+'</div><div class="bt"><div class="bf" style="width:'+w.toFixed(1)+'%"></div></div><div class="bv">'+eur(val,0)+'</div></div>'; });
-    else h+='<div class="empty">Keine Ausgaben im Zeitraum.</div>';
-    h+='</div></div>';
+    function catPanel(title,by,color,sumTxt,emptyMsg){
+      var cats=Object.keys(by).sort(function(a,b){return Math.abs(by[b])-Math.abs(by[a]);}), mx=1; cats.forEach(function(k){mx=Math.max(mx,Math.abs(by[k]));});
+      var p='<div class="panel"><div class="alv-bar"><h2>'+title+'</h2><span class="muted" style="font-size:12px;margin-left:6px">(klick = filtern)</span><span class="sp"></span><span class="count">'+sumTxt+'</span></div><div style="padding:14px 16px 16px">';
+      if(cats.length) cats.forEach(function(k){ var val=by[k],w=Math.max(1.5,Math.abs(val)/mx*100),on=acFilter.kat===k; p+='<div class="bar-row acbar'+(on?' on':'')+'" data-ackat="'+esc(k)+'"><div class="bl">'+esc(k)+'</div><div class="bt"><div class="bf" style="width:'+w.toFixed(1)+'%;background:'+color+'"></div></div><div class="bv">'+eur(val,0)+'</div></div>'; });
+      else p+='<div class="empty">'+esc(emptyMsg||"Nichts im Zeitraum.")+'</div>';
+      return p+'</div></div>';
+    }
+    if(einMit>0) h+=catPanel("Einnahmen je Kategorie",byIn,"var(--pos)","+"+eur(einOhne,0),"Alle Einnahmen im Zeitraum sind Umbuchungen (siehe Ergebnis · mit Umbuchungen).");
+    h+=catPanel("Ausgaben je Kategorie",byOut,"var(--accent)",eur(ausOhne,0),"Keine Ausgaben im Zeitraum.");
     var txL=acFilter.kat?txM.filter(function(t){return (t.kat||"Unklar")===acFilter.kat;}):txM;
     var sorted=txL.slice().sort(function(a,b){return a.datum<b.datum?1:a.datum>b.datum?-1:0;});
     h+='<div class="panel"><div class="alv-bar"><h2>'+(acFilter.kat?esc(acFilter.kat):"Buchungen")+'</h2><span class="count">'+txL.length+'</span>'+(acFilter.kat?' <button class="editbtn" data-acclear="1">× Filter</button>':'')+'<span class="sp"></span><span class="mini-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input class="grid-filter" placeholder="Filtern…"></span></div><div class="alv-wrap"><table class="alv"><thead><tr><th>Datum</th><th>Empfänger</th><th>Kategorie</th><th>Typ</th><th class="num">Betrag</th></tr></thead><tbody>';

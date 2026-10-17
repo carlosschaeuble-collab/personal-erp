@@ -397,8 +397,8 @@ var ERP_CFG={
   }
   function gridHTML(v, code){
     var cols=v.cols, money=v.money_idx||[];
-    var show=[]; cols.forEach(function(c,i){ if(!/^ID/i.test(c)) show.push(i); });
     var em=!!(editState[code]&&v.src);
+    var show=[]; cols.forEach(function(c,i){ if(!/^ID/i.test(c)||(em&&editColOf(v,i)!=null)) show.push(i); });
     var items=v.rows.map(function(r,i){return {r:r,oi:i};});
     var ss=sortState[code];
     if(ss&&!em){ var col=ss.col,dir=ss.dir; items.sort(function(a,b){ var x=a.r[col],y=b.r[col];
@@ -409,7 +409,7 @@ var ERP_CFG={
     var editBtn=v.src?('<button class="editbtn'+(em?' on':'')+'" data-edit="'+code+'">'+(em?'✓ Fertig':'✎ Bearbeiten')+'</button>'):'';
     var addBtns=em?('<button class="editbtn" data-addrow="'+code+'">➕ Zeile</button>'+(v.src.edit==="auto"?'<button class="editbtn" data-addcol="'+code+'">➕ Spalte</button>':'')):'';
     var search=em?'':'<span class="mini-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input class="grid-filter" placeholder="Filtern…" aria-label="Filtern"></span>';
-    var h='<div class="panel"><div class="alv-bar"><h2>'+esc(v.title)+'</h2><span class="count">'+v.rows.length+'</span><span class="sp"></span>'+search+addBtns+editBtn+toolbar()+'</div>'+(em?'<div class="edit-hint">Zellen bearbeiten — Änderungen gehen direkt in dein Google-Sheet. Mit „➕" Zeilen/Spalten anlegen, mit „✕" eine Zeile löschen.</div>':'')+'<div class="alv-wrap"><table class="alv"><thead><tr>';
+    var h='<div class="panel"><div class="alv-bar"><h2>'+esc(v.title)+'</h2><span class="count">'+v.rows.length+'</span><span class="sp"></span>'+search+addBtns+editBtn+toolbar()+'</div>'+(em?'<div class="edit-hint">Zellen bearbeiten — Änderungen gehen direkt in dein Google-Sheet. Mit „➕" Zeilen/Spalten anlegen, mit „✕" eine Zeile löschen.'+(code==="F"?' Die <b>ID</b> kannst du frei vergeben (z. B. „Sparkasse-Giro") – am besten kurz &amp; eindeutig.':'')+'</div>':'')+'<div class="alv-wrap"><table class="alv"><thead><tr>';
     show.forEach(function(i){ var ind=(ss&&ss.col===i&&!em)?'<span class="sort">'+(ss.dir>0?'▲':'▼')+'</span>':''; h+='<th class="'+(money.indexOf(i)>=0?'num':'')+'"'+(em?'':' data-sort="'+i+'"')+'>'+esc(cols[i])+ind+'</th>'; });
     if(em) h+='<th style="width:36px"></th>';
     h+='</tr></thead><tbody>';
@@ -1316,7 +1316,7 @@ function parseSheets(S){
   var rowsB3=[],srcB3=[]; for(r=2;r<maxRow('B3');r++){ var a=cell('B3',r,0); if(!a)continue; rowsB3.push([a,cell('B3',r,1),cell('B3',r,2),num(cell('B3',r,3))]); srcB3.push(r); }
   gridview('B3','Immobilienwerte',['Objekt','Ort','Bkr','Wert (€)'],rowsB3,3,[3],{sheet:'B3',srcRows:srcB3,headerRow:1,edit:mapCols(0,4)});
   var rowsF=[],srcF=[]; for(r=1;r<maxRow('F');r++){ var bank=cell('F',r,1); if(!bank||String(bank).trim()==="Summe")continue; rowsF.push([cell('F',r,0),bank,cell('F',r,2),num(cell('F',r,3)),cell('F',r,4),num(cell('F',r,3))]); srcF.push(r); }
-  gridview('F','Global Cash – Bankkonten',['ID','Bank','Konto','Kontostand (€)','Bkr','Wert (€)'],rowsF,5,[3,5],{sheet:'F',srcRows:srcF,headerRow:0,edit:[{c:1,sc:1},{c:2,sc:2},{c:3,sc:3},{c:4,sc:4}]});
+  gridview('F','Global Cash – Bankkonten',['ID','Bank','Konto','Kontostand (€)','Bkr','Wert (€)'],rowsF,5,[3,5],{sheet:'F',srcRows:srcF,headerRow:0,edit:[{c:0,sc:0},{c:1,sc:1},{c:2,sc:2},{c:3,sc:3},{c:4,sc:4}]});
   var rowsG=[],srcG=[]; for(r=1;r<maxRow('G');r++){ var art=cell('G',r,1); if(!art||String(art).trim()==="Summe")continue; var betrag=num(cell('G',r,4))||0; var saldo=(String(art).indexOf("Verbindlich")===0)?-betrag:betrag; rowsG.push([cell('G',r,0),art,cell('G',r,2),cell('G',r,3),betrag,cell('G',r,5),cell('G',r,6),cell('G',r,7),saldo]); srcG.push(r); }
   gridview('G','Global AR/AP',['ID','Art','Name','Gegenpartei','Betrag (€)','Miete','Start','Bkr','Saldo (€)'],rowsG,8,[4,8],{sheet:'G',srcRows:srcG,headerRow:0,edit:mapCols(1,8)});
   // investments

@@ -542,12 +542,12 @@ var ERP_CFG={
     h+='</tr></tfoot>';
     h+='</table></div></div>'; return h;
   }
-  var GUV_EDIT={tage:2,umsatz:3,fee:5,iva:6,rep:8,neb:9,adj:10,son:11};
+  var GUV_EDIT={tage:2,umsatz:3,fee:5,iva:6,rep:8,neb:9,adj:10,son:11,est:13};
   function guvHTML(v){
     var em=!!editState["H1.3"];
     var h='<div class="crumb">Business › Marbella</div><div class="page-head"><h1>Marbella – GuV</h1><span style="flex:1"></span><button class="editbtn'+(em?' on':'')+'" data-edit="H1.3">'+(em?'✓ Fertig':'✎ Bearbeiten')+'</button></div>';
-    if(em) h+='<div class="note-card" style="padding:10px 14px;margin-bottom:12px;max-width:none"><p style="margin:0;font-size:12.5px" class="muted">Nur die Eingabefelder (Tage, Umsatz, Fee, IVA, Reparaturen, Nebenkosten, Adjustments, Sonstige) sind editierbar — <b>EBIT, ESt &amp; Gewinn rechnen sich automatisch</b> nach „✓ Fertig".</p></div>';
-    var cols=["Monat","Tage","Umsatz","€/Nacht","Fee","IVA","Total Fee","Rep.","Neben","Adj.","Sonst.","EBIT","ESt 35%","Gewinn"];
+    if(em) h+='<div class="note-card" style="padding:10px 14px;margin-bottom:12px;max-width:none"><p style="margin:0;font-size:12.5px" class="muted">Eingabefelder (Tage, Umsatz, Fee, IVA, Reparaturen, Nebenkosten, Adjustments, Sonstige, <b>ESt</b>) sind editierbar — <b>€/Nacht, Total Fee, EBIT &amp; Gewinn</b> rechnen sich automatisch. Die <b>ESt</b> kommt aus deiner P&amp;L / den Buchungen; leer = 35 %-Schätzung.</p></div>';
+    var cols=["Monat","Tage","Umsatz","€/Nacht","Fee","IVA","Total Fee","Rep.","Neben","Adj.","Sonst.","EBIT","ESt","Gewinn"];
     var keys=["monat","tage","umsatz","eur_nacht","fee","iva","tfee","rep","neb","adj","son","ebit","est","gewinn"];
     var numc=[1,2,3,4,5,6,7,8,9,10,11,12,13];
     var years={}; v.months.forEach(function(m){ (years[m.jahr]=years[m.jahr]||[]).push(m); });
@@ -1353,7 +1353,8 @@ function parseSheets(S){
   // GuV
   var months=[]; for(r=5;r<=30;r++){ var jahr=cell('H1.3',r,0),monat=cell('H1.3',r,1); if(monat==null||(typeof monat==="string"&&monat.indexOf("Summe")===0))continue;
     var tage=num(cell('H1.3',r,2))||0,ums=num(cell('H1.3',r,3))||0,fee=num(cell('H1.3',r,5))||0,iva=num(cell('H1.3',r,6))||0,rep=num(cell('H1.3',r,8))||0,neb=num(cell('H1.3',r,9))||0,adj=num(cell('H1.3',r,10))||0,son=num(cell('H1.3',r,11))||0;
-    var tfee=fee+iva,ebit=ums-tfee-rep-neb-adj-son,est=round2(0.35*ebit);
+    var tfee=fee+iva,ebit=ums-tfee-rep-neb-adj-son;
+    var estCell=cell('H1.3',r,13),est=(estCell==null||estCell==="")?round2(0.35*ebit):round2(num(estCell)||0);
     months.push({jahr:jahr?parseInt(jahr):null,monat:monat,sheetRow:r,tage:tage,umsatz:round2(ums),eur_nacht:tage?round2(ums/tage):0,fee:fee,iva:iva,tfee:round2(tfee),rep:rep,neb:neb,adj:adj,son:son,ebit:round2(ebit),est:est,gewinn:round2(ebit-est)}); }
   views['H1.3']={kind:"guv",title:"Marbella – GuV",months:months};
   // Costa Golf – Monatsabrechnungen (Settlement-Tabelle; Fallback: altes Key/Value-Layout)

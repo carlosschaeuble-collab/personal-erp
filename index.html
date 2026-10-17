@@ -759,12 +759,14 @@ var ERP_CFG={
     var begMap={}; tx.forEach(function(x){ if(x.empf&&x.kat&&x.kat!=="Unklar") begMap[x.empf]=x.kat; }); window.__BK_BEGMAP=begMap;
     var begs=Object.keys(begMap).sort(function(a,b){return a.localeCompare(b);});
     var cats=(ACDOCA_CATLIST.length?ACDOCA_CATLIST.slice():ACDOCA_CATS.slice()); ACATS.forEach(function(c){ if(cats.indexOf(c)<0) cats.push(c); }); if(cats.indexOf("Unklar")<0) cats.push("Unklar");
+    var bkrs={}; AC.forEach(function(x){ if(x.bkr)bkrs[String(x.bkr)]=1; }); ((V['F']&&V['F'].rows)||[]).forEach(function(r){ if(r[4])bkrs[String(r[4])]=1; }); Object.keys(BUCHCFG).forEach(function(k){ if(BUCHCFG[k].bkr)bkrs[BUCHCFG[k].bkr]=1; });
+    var bkrList=Object.keys(bkrs).sort();
     var today=new Date().toISOString().slice(0,10);
     var h='<div class="crumb" data-go="'+cfg.back+'" style="cursor:pointer">‹ '+esc(streamLbl)+'</div><div class="page-head"><h1>'+esc(t.label)+'</h1></div>';
     h+='<div class="panel"><div style="padding:18px"><div class="bform">';
     h+='<div class="two"><div class="row"><label>Datum</label><input type="date" id="bk_datum" value="'+today+'"></div><div class="row"><label>Betrag (€)</label><input id="bk_betrag" inputmode="text" placeholder="-123,45  ·  minus = Ausgabe"></div></div>';
     h+='<div class="row"><label>Begünstiger</label><input id="bk_empf" list="bk_begs" placeholder="z. B. Firma / Person"><datalist id="bk_begs">'+begs.map(function(b){return '<option value="'+esc(b)+'">';}).join('')+'</datalist></div>';
-    h+='<div class="row"><label>Kategorie</label><select id="bk_kat">'+cats.map(function(c){return '<option>'+esc(c)+'</option>';}).join('')+'</select></div>';
+    h+='<div class="two"><div class="row"><label>Kategorie</label><select id="bk_kat">'+cats.map(function(c){return '<option>'+esc(c)+'</option>';}).join('')+'</select></div><div class="row"><label>Buchungskreis</label><input id="bk_bkr" list="bk_bkrs" value="'+esc(cfg.bkr)+'" placeholder="z. B. 2020"><datalist id="bk_bkrs">'+bkrList.map(function(b){return '<option value="'+esc(b)+'">';}).join('')+'</datalist></div></div>';
     h+='<div class="row"><label>Verwendungszweck <span class="muted" style="font-weight:400">(optional)</span></label><input id="bk_zweck" placeholder="z. B. Rechnung Nr. …"></div>';
     h+='<div style="display:flex;gap:12px;align-items:center;margin-top:6px"><button class="editbtn on" data-buchen="'+esc(code)+'">Beleg buchen</button><span class="muted" style="font-size:12px">→ ACDOCA-Journal · Objekt/Stream = '+esc(streamLbl)+'</span></div>';
     h+='</div></div></div>';
@@ -777,12 +779,12 @@ var ERP_CFG={
     var cfg=BUCHCFG[code]||BUCHCFG.CBUCH;
     if(!window.ERP_append){ toast("Buchen braucht Anmeldung — bitte neu einloggen.",true); return; }
     function gv(id){ var e=document.getElementById(id); return e?String(e.value||"").trim():""; }
-    var datum=gv('bk_datum'), empf=gv('bk_empf'), betrag=acDeNum(gv('bk_betrag')), kat=gv('bk_kat'), zweck=gv('bk_zweck');
+    var datum=gv('bk_datum'), empf=gv('bk_empf'), betrag=acDeNum(gv('bk_betrag')), kat=gv('bk_kat'), zweck=gv('bk_zweck'), bkr=gv('bk_bkr')||cfg.bkr;
     if(!datum){ toast("Bitte Datum angeben.",true); return; }
     if(!empf){ toast("Bitte Begünstiger angeben.",true); return; }
     if(!betrag){ toast("Bitte gültigen Betrag angeben (z. B. -123,45).",true); return; }
     var id="HB"+Date.now().toString(36)+Math.floor(Math.random()*1e3).toString(36);
-    var row=[id,datum,cfg.konto,empf,zweck,betrag,kat||"Unklar","Hauptbuchbeleg",cfg.bkr,cfg.konto,cfg.stream,"","Ist",""];
+    var row=[id,datum,cfg.konto,empf,zweck,betrag,kat||"Unklar","Hauptbuchbeleg",bkr,cfg.konto,cfg.stream,"","Ist",""];
     toast("Buche Beleg …");
     window.ERP_append("ACDOCA",[row]).then(function(){
       if(window.__SHEETS){ var A=window.__SHEETS['ACDOCA']||(window.__SHEETS['ACDOCA']=[]); A.push(row); boot(parseSheets(window.__SHEETS),cfg.after); }

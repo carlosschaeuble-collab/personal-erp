@@ -93,6 +93,10 @@ table.alv tfoot td{background:#f3f5f6;border-top:1px solid var(--line-strong);fo
 .note-card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px 20px;max-width:720px}
 .cg-meta{display:flex;flex-wrap:wrap;gap:6px 20px;margin:0 0 16px;font-size:12.5px;color:var(--ink-2)}
 .cg-meta b{color:var(--ink);font-weight:600}
+.alv th.grp{text-align:center;color:var(--ink-2);font-size:11px;letter-spacing:.04em;text-transform:uppercase;font-weight:600}
+.alv th .sub2{display:block;font-weight:400;font-size:10px;color:var(--ink-3);text-transform:none;letter-spacing:0;margin-top:1px}
+.alv .gsep{border-left:1px solid var(--line-strong)}
+.alv .bold{font-weight:600}
 .seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:6px;overflow:hidden;vertical-align:middle}
 .seg-b{border:0;background:var(--surface);color:var(--ink-2);font:inherit;font-size:11.5px;line-height:1;padding:4px 11px;cursor:pointer}
 .seg-b+.seg-b{border-left:1px solid var(--line)}
@@ -538,12 +542,17 @@ var ERP_CFG={
   var CG_MONTHS={januar:1,februar:2,"märz":3,april:4,mai:5,juni:6,juli:7,august:8,september:9,oktober:10,november:11,dezember:12};
   function cgNum(x){ if(x==null||x==="")return 0; if(typeof x==="number")return x; var s=String(x).replace(/[\s€]/g,""); if(/,/.test(s)&&/\.\d{3}(\D|$)/.test(s)) s=s.replace(/\./g,""); s=s.replace(",","."); var n=parseFloat(s); return isNaN(n)?0:n; }
   function cgIdx(cols){ function f(re){ for(var i=0;i<cols.length;i++){ if(re.test(String(cols[i]||"")))return i; } return -1; }
-    return {monat:f(/^\s*Monat/i),jahr:f(/^\s*Jahr/i),airbnb:f(/Airbnb\s*netto/i),cg:f(/Costa\s*Golf/i),netto:f(/Ingreso\s*netto/i),brutto:f(/Ingreso\s*brutto/i),fee:f(/Fee/i),hon:f(/Honorar/i),iva:f(/IVA/i)}; }
+    return {monat:f(/^\s*Monat/i),jahr:f(/^\s*Jahr/i),
+      bkBrutto:f(/Booking\s*brutto/i),bkProv:f(/Prov\.?\s*Booking/i),bkNetto:f(/Booking\s*netto/i),
+      abBrutto:f(/Airbnb\s*brutto/i),abProv:f(/Prov\.?\s*Airbnb/i),abNetto:f(/Airbnb\s*netto/i),
+      cg:f(/Costa\s*Golf/i),netto:f(/Ingreso\s*netto/i),brutto:f(/Ingreso\s*brutto/i),
+      fee:f(/Fee/i),hon:f(/Honorar/i),iva:f(/IVA/i)}; }
   function costaGolfHTML(v){
     var cols=v.cols||[], rows=v.rows||[], ix=cgIdx(cols);
     var ms=rows.filter(function(r){ return ix.monat>=0 && CG_MONTHS[String(r[ix.monat]==null?"":r[ix.monat]).trim().toLowerCase()]; });
-    var T={airbnb:0,cg:0,netto:0,brutto:0,hon:0,iva:0,pay:0};
-    ms.forEach(function(r){ var ne=cgNum(r[ix.netto]),ho=cgNum(r[ix.hon]),iv=cgNum(r[ix.iva]); T.airbnb+=cgNum(r[ix.airbnb]); T.cg+=cgNum(r[ix.cg]); T.netto+=ne; T.brutto+=cgNum(r[ix.brutto]); T.hon+=ho; T.iva+=iv; T.pay+=ne-ho-iv; });
+    function N(r,i){ return i>=0?cgNum(r[i]):0; }
+    var T={bkN:0,abN:0,cg:0,netto:0,brutto:0,hon:0,iva:0,pay:0};
+    ms.forEach(function(r){ var ne=N(r,ix.netto),ho=N(r,ix.hon),iv=N(r,ix.iva); T.bkN+=N(r,ix.bkNetto); T.abN+=N(r,ix.abNetto); T.cg+=N(r,ix.cg); T.netto+=ne; T.brutto+=N(r,ix.brutto); T.hon+=ho; T.iva+=iv; T.pay+=ne-ho-iv; });
     var h='<div class="crumb">Business › Marbella</div><div class="page-head"><h1>Marbella – Costa Golf</h1><span class="muted" style="font-size:12.5px;margin-left:4px">Monatsabrechnungen der Verwaltung</span><span style="flex:1"></span><button class="editbtn" data-edit="H1.1">✎ Bearbeiten</button></div>';
     if(v.meta&&v.meta.length){ h+='<div class="cg-meta">'; v.meta.forEach(function(p){ h+='<span><b>'+esc(p[0])+':</b> '+esc(p[1])+'</span>'; }); h+='</div>'; }
     h+='<section class="tiles">'
@@ -553,19 +562,45 @@ var ERP_CFG={
       +'<div class="tile"><p class="k">Netto-Auszahlung</p><div class="v" style="color:var(--pos)">'+eur(T.pay)+'</div><div class="d">an Eigentümer nach Honorar</div></div>'
       +'</section>';
     if(!ms.length){ h+='<div class="note-card"><p style="margin:0" class="muted">Noch keine Monatsabrechnungen hinterlegt. Über „✎ Bearbeiten" Zeilen ergänzen.</p></div>'; return h; }
+    var segs=[]; if(T.cg>0)segs.push({label:"Costa Golf (direkt)",value:T.cg,color:"#0070f2"}); if(T.abN>0)segs.push({label:"Airbnb",value:T.abN,color:"#e76500"}); if(T.bkN>0)segs.push({label:"Booking.com",value:T.bkN,color:"#8b5cf6"});
+    if(segs.length>1){ var chTot=T.cg+T.abN+T.bkN;
+      h+='<div class="panel"><div class="alv-bar"><h2>Einnahmen nach Kanal</h2><span class="sp"></span><span class="count">netto '+eur(chTot)+'</span></div><div class="chartrow">'+donutSVG(segs,chTot,eur(chTot),"NETTO")+'<div class="leg">';
+      segs.forEach(function(s){ var pct=chTot?s.value/chTot*100:0; h+='<div class="leg-row"><span class="leg-dot" style="background:'+s.color+'"></span><span class="leg-name">'+esc(s.label)+'</span><span class="leg-val">'+eur(s.value)+'</span><span class="leg-pct">'+pct.toFixed(0)+' %</span></div>'; });
+      h+='</div></div></div>';
+    }
+    var hasBk=ms.some(function(r){return N(r,ix.bkBrutto)||N(r,ix.bkProv)||N(r,ix.bkNetto);});
+    var hasAb=ms.some(function(r){return N(r,ix.abBrutto)||N(r,ix.abProv)||N(r,ix.abNetto);});
+    var hasCG=T.cg>0;
+    function c(val,extra){ return '<td class="num'+(extra||'')+'">'+(val?eur(val,2):'–')+'</td>'; }
     var years={}; ms.forEach(function(r){ var y=String(r[ix.jahr]==null?"?":r[ix.jahr]).trim()||"?"; (years[y]=years[y]||[]).push(r); });
-    var cdef=["Monat","Airbnb (€)","Costa Golf (€)","Ingreso netto (€)","Ingreso brutto (€)","Fee %","Honorar (€)","IVA (€)","Auszahlung (€)"];
-    Object.keys(years).sort().forEach(function(y){
+    Object.keys(years).sort(function(a,b){ return (parseInt(b,10)||0)-(parseInt(a,10)||0); }).forEach(function(y){
       var list=years[y].slice().sort(function(a,b){ return (CG_MONTHS[String(a[ix.monat]).trim().toLowerCase()]||0)-(CG_MONTHS[String(b[ix.monat]).trim().toLowerCase()]||0); });
-      var s={airbnb:0,cg:0,netto:0,brutto:0,hon:0,iva:0,pay:0};
-      h+='<div class="panel"><div class="alv-bar"><h2>Jahr '+esc(y)+'</h2><span class="count">'+list.length+' Monate</span></div><div class="alv-wrap"><table class="alv"><thead><tr>';
-      cdef.forEach(function(c,i){ h+='<th class="'+(i?'num':'name')+'">'+esc(c)+'</th>'; }); h+='</tr></thead><tbody>';
-      list.forEach(function(r){ var ab=cgNum(r[ix.airbnb]),cg=cgNum(r[ix.cg]),ne=cgNum(r[ix.netto]),br=cgNum(r[ix.brutto]),fe=cgNum(r[ix.fee]),ho=cgNum(r[ix.hon]),iv=cgNum(r[ix.iva]),pa=ne-ho-iv;
-        s.airbnb+=ab;s.cg+=cg;s.netto+=ne;s.brutto+=br;s.hon+=ho;s.iva+=iv;s.pay+=pa;
+      var yp=0; list.forEach(function(r){ yp+=N(r,ix.netto)-N(r,ix.hon)-N(r,ix.iva); });
+      var t1='<tr><th class="name" rowspan="2">Monat</th>', t2='<tr>';
+      if(hasBk){ t1+='<th class="grp gsep" colspan="3">Booking.com</th>'; t2+='<th class="num gsep">brutto</th><th class="num">Prov.</th><th class="num">netto</th>'; }
+      if(hasAb){ t1+='<th class="grp gsep" colspan="3">Airbnb</th>'; t2+='<th class="num gsep">brutto</th><th class="num">Prov.</th><th class="num">netto</th>'; }
+      if(hasCG){ t1+='<th class="grp gsep" rowspan="2">Costa&nbsp;Golf<span class="sub2">direkt</span></th>'; }
+      t1+='<th class="grp gsep" colspan="2">Einnahmen</th>'; t2+='<th class="num gsep">netto</th><th class="num">brutto</th>';
+      t1+='<th class="grp gsep" colspan="3">Verwaltung</th>'; t2+='<th class="num gsep">Fee</th><th class="num">Honorar</th><th class="num">IVA</th>';
+      t1+='<th class="grp gsep" rowspan="2">Auszahlung</th></tr>'; t2+='</tr>';
+      h+='<div class="panel"><div class="alv-bar"><h2>Jahr '+esc(y)+'</h2><span class="count">'+list.length+' Monate</span><span class="sp"></span><span class="count">Auszahlung '+eur(yp)+'</span></div><div class="alv-wrap"><table class="alv"><thead>'+t1+t2+'</thead><tbody>';
+      var s={bkb:0,bkp:0,bkn:0,abb:0,abp:0,abn:0,cg:0,netto:0,brutto:0,hon:0,iva:0,pay:0};
+      list.forEach(function(r){ var bkb=N(r,ix.bkBrutto),bkp=N(r,ix.bkProv),bkn=N(r,ix.bkNetto),abb=N(r,ix.abBrutto),abp=N(r,ix.abProv),abn=N(r,ix.abNetto),cg=N(r,ix.cg),ne=N(r,ix.netto),br=N(r,ix.brutto),fe=N(r,ix.fee),ho=N(r,ix.hon),iv=N(r,ix.iva),pa=ne-ho-iv;
+        s.bkb+=bkb;s.bkp+=bkp;s.bkn+=bkn;s.abb+=abb;s.abp+=abp;s.abn+=abn;s.cg+=cg;s.netto+=ne;s.brutto+=br;s.hon+=ho;s.iva+=iv;s.pay+=pa;
         var ft=fe?((fe<1?fe*100:fe).toLocaleString("de-DE",{maximumFractionDigits:1})+" %"):"–";
-        h+='<tr><td class="name">'+esc(r[ix.monat])+'</td><td class="num">'+(ab?eur(ab,2):'–')+'</td><td class="num">'+(cg?eur(cg,2):'–')+'</td><td class="num">'+eur(ne,2)+'</td><td class="num">'+eur(br,2)+'</td><td class="num">'+ft+'</td><td class="num">'+eur(ho,2)+'</td><td class="num">'+eur(iv,2)+'</td><td class="num" style="font-weight:600">'+eur(pa,2)+'</td></tr>';
+        var row='<tr><td class="name">'+esc(r[ix.monat])+'</td>';
+        if(hasBk) row+=c(bkb,' gsep')+c(bkp)+c(bkn);
+        if(hasAb) row+=c(abb,' gsep')+c(abp)+c(abn);
+        if(hasCG) row+=c(cg,' gsep');
+        row+=c(ne,' gsep')+c(br)+'<td class="num gsep">'+ft+'</td>'+c(ho)+c(iv)+c(pa,' gsep bold');
+        h+=row+'</tr>';
       });
-      h+='</tbody><tfoot><tr><td>Summe '+esc(y)+'</td><td class="num">'+eur(s.airbnb,2)+'</td><td class="num">'+eur(s.cg,2)+'</td><td class="num">'+eur(s.netto,2)+'</td><td class="num">'+eur(s.brutto,2)+'</td><td class="num"></td><td class="num">'+eur(s.hon,2)+'</td><td class="num">'+eur(s.iva,2)+'</td><td class="num">'+eur(s.pay,2)+'</td></tr></tfoot></table></div></div>';
+      var f='<tr><td>Summe '+esc(y)+'</td>';
+      if(hasBk) f+=c(s.bkb,' gsep')+c(s.bkp)+c(s.bkn);
+      if(hasAb) f+=c(s.abb,' gsep')+c(s.abp)+c(s.abn);
+      if(hasCG) f+=c(s.cg,' gsep');
+      f+=c(s.netto,' gsep')+c(s.brutto)+'<td class="num gsep"></td>'+c(s.hon)+c(s.iva)+c(s.pay,' gsep bold');
+      h+='</tbody><tfoot>'+f+'</tr></tfoot></table></div></div>';
     });
     if(v.note){ h+='<div class="note-card" style="max-width:none;margin-top:2px"><p style="margin:0;font-size:12.5px" class="muted">'+esc(v.note)+'</p></div>'; }
     return h;

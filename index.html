@@ -1260,8 +1260,16 @@ function parseSheets(S){
   function mapCols(from,to){ var a=[]; for(var i=from;i<to;i++)a.push({c:i,sc:i}); return a; }
   var views={};
   function gridview(code,title,cols,rows,sum_idx,money_idx,src){ views[code]={kind:"grid",title:title,cols:cols,rows:rows,sum_idx:(sum_idx==null?null:sum_idx),money_idx:money_idx||[],src:src||null}; }
+  // Tabellenkopf robust bestimmen: überspringt den "Seite/Beschreibung/Tabelle"-Metakopf und liefert die erste echte Kopfzeile danach. Ohne Metakopf → fallback (altes festes Layout).
+  function hdrRow(sheet,fallback){
+    var metaEnd=-1, lim=Math.min(maxRow(sheet),15);
+    for(var hr=0;hr<lim;hr++){ var a=String(cell(sheet,hr,0)||"").trim().toLowerCase(); if(a==="seite"||a==="beschreibung"||a==="tabelle")metaEnd=hr; }
+    if(metaEnd<0)return fallback;
+    for(var hr2=metaEnd+1;hr2<maxRow(sheet);hr2++){ for(var hc=0;hc<12;hc++){ if(cell(sheet,hr2,hc)!=null)return hr2; } }
+    return fallback;
+  }
   var e;
-  e=extract('B1',2); gridview('B1','Business Partner',e.cols,e.rows,null,null,{sheet:'B1',srcRows:e.srcRows,headerRow:e.headerRow,edit:"auto"});
+  e=extract('B1',hdrRow('B1',2)); gridview('B1','Business Partner',e.cols,e.rows,null,null,{sheet:'B1',srcRows:e.srcRows,headerRow:e.headerRow,edit:"auto"});
   var hrB2=-1; for(var rb=0;rb<Math.min(maxRow('B2'),12);rb++){ for(var cb=0;cb<8;cb++){ if(/schl(ü|ue)ssel/i.test(String(cell('B2',rb,cb)||""))){ hrB2=rb; break; } } if(hrB2>=0)break; } if(hrB2<0)hrB2=2;
   e=extract('B2',hrB2); gridview('B2','Buchungskreise',e.cols,e.rows,null,null,{sheet:'B2',srcRows:e.srcRows,headerRow:e.headerRow,edit:"auto"});
   var rowsB3=[],srcB3=[]; for(r=2;r<maxRow('B3');r++){ var a=cell('B3',r,0); if(!a)continue; rowsB3.push([a,cell('B3',r,1),cell('B3',r,2),num(cell('B3',r,3))]); srcB3.push(r); }

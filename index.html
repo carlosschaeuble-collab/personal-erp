@@ -692,18 +692,28 @@ var ERP_CFG={
     /* nur Kosten: Ausgaben ohne Umbuchungen; Einnahmen bleiben außen vor */
     var costs=all.filter(function(x){ return x.betrag<0 && !/^Umbuchung/i.test(x.kat); });
     var catList=Object.keys(costs.reduce(function(a,x){ a[x.kat||"Unklar"]=1; return a; },{})).sort();
-    if(!mkFilter._init){ mkFilter._init=1; mkFilter.month=""; mkFilter.excl={}; catList.forEach(function(c){ if(/geldanlage/i.test(c)) mkFilter.excl[c]=1; }); }
-    var txF=costs.filter(function(x){ var c=x.kat||"Unklar"; if(mkFilter.excl[c]) return false; if(mkFilter.month&&String(x.datum||"").slice(0,7)!==mkFilter.month) return false; return true; });
-    var months={}; costs.forEach(function(x){ var mk=String(x.datum||"").slice(0,7); if(/^\d{4}-\d{2}$/.test(mk)) months[mk]=1; });
-    var mkeys=Object.keys(months).sort().reverse(), total=0; txF.forEach(function(x){ total+=x.betrag; });
-    h+='<div class="acfilterbar"><span class="fl">Monat</span><select id="mkmonth"><option value=""'+(!mkFilter.month?' selected':'')+'>Alle Monate</option>';
+    if(!mkFilter._init){ mkFilter._init=1; mkFilter.year=""; mkFilter.month=""; mkFilter.excl={}; catList.forEach(function(c){ if(/geldanlage/i.test(c)) mkFilter.excl[c]=1; }); }
+    function inPeriod(x){ var d=String(x.datum||""); if(mkFilter.year&&d.slice(0,4)!==mkFilter.year) return false; if(mkFilter.month&&d.slice(0,7)!==mkFilter.month) return false; return true; }
+    var txF=costs.filter(function(x){ return !mkFilter.excl[x.kat||"Unklar"] && inPeriod(x); });
+    var total=0; txF.forEach(function(x){ total+=x.betrag; });
+    var einSum=0; all.forEach(function(x){ if(x.betrag>=0 && !/^Umbuchung/i.test(x.kat) && inPeriod(x)) einSum+=x.betrag; });
+    var saldo=einSum+total;
+    var years={}; all.forEach(function(x){ var y=String(x.datum||"").slice(0,4); if(/^\d{4}$/.test(y))years[y]=1; });
+    var ykeys=Object.keys(years).sort().reverse();
+    var months={}; costs.forEach(function(x){ var mk=String(x.datum||"").slice(0,7); if(/^\d{4}-\d{2}$/.test(mk)&&(!mkFilter.year||mk.slice(0,4)===mkFilter.year)) months[mk]=1; });
+    var mkeys=Object.keys(months).sort().reverse();
+    h+='<div class="acfilterbar"><span class="fl">Jahr</span><select id="mkyear"><option value=""'+(!mkFilter.year?' selected':'')+'>Alle Jahre</option>';
+    ykeys.forEach(function(y){ h+='<option value="'+y+'"'+(y===mkFilter.year?' selected':'')+'>'+esc(y)+'</option>'; });
+    h+='</select><span class="fl" style="margin-left:16px">Monat</span><select id="mkmonth"><option value=""'+(!mkFilter.month?' selected':'')+'>Alle Monate</option>';
     mkeys.forEach(function(mk){ h+='<option value="'+mk+'"'+(mk===mkFilter.month?' selected':'')+'>'+esc(acMonthLabel(mk))+'</option>'; });
     h+='</select></div>';
     if(catList.length){ h+='<div class="catfilter"><span class="fl">Kategorien</span>';
       catList.forEach(function(c){ var off=!!mkFilter.excl[c]; h+='<button class="catchip'+(off?' off':'')+'" data-mkcat="'+esc(c)+'" title="'+(off?'einblenden':'ausblenden')+'">'+esc(c)+'</button>'; });
       h+='</div>'; }
+    var perd=mkFilter.month?acMonthLabel(mkFilter.month):(mkFilter.year||"alle Jahre");
     h+='<section class="tiles">'
-      +tile("Kosten (Ist)",eur(total,0),kontoName+(mkFilter.month?" · "+acMonthLabel(mkFilter.month):" · ausgewählte Kategorien"),"big")
+      +tile("Kosten (Ist)",eur(total,0),kontoName+" · "+perd,"big")
+      +'<div class="tile"><p class="k">Saldo</p><div class="v" style="color:'+(saldo>=0?'var(--pos)':'var(--neg)')+'">'+(saldo>=0?"+":"")+eur(saldo,0)+'</div><div class="d">Einnahmen − gewählte Kosten</div></div>'
       +tile("Buchungen",txF.length,"Kostenbuchungen")
       +'</section>';
     var byK={}; txF.forEach(function(x){ var c=x.kat||"Unklar"; byK[c]=(byK[c]||0)+x.betrag; });
@@ -1154,7 +1164,7 @@ var ERP_CFG={
       if(tb) Array.prototype.forEach.call(tb.rows,function(tr){ tr.style.display = tr.textContent.toLowerCase().indexOf(q)>=0 ? "" : "none"; });
     }
   });
-  document.getElementById("page").addEventListener("change",function(e){ if(e.target.id==="acfile"){ acHandleFile(e.target); return; } if(e.target.id==="acmonth"){ acFilter.month=e.target.value; render(); return; } if(e.target.id==="mkmonth"){ mkFilter.month=e.target.value; render(); return; } if(e.target.id==="bk_empf"){ var m=window.__BK_BEGMAP||{}, k=m[String(e.target.value||"").trim()]; if(k){ var ks=document.getElementById('bk_kat'); if(ks)ks.value=k; } return; } if(e.target.classList.contains("cell-edit")) saveCell(e.target); });
+  document.getElementById("page").addEventListener("change",function(e){ if(e.target.id==="acfile"){ acHandleFile(e.target); return; } if(e.target.id==="acmonth"){ acFilter.month=e.target.value; render(); return; } if(e.target.id==="mkyear"){ mkFilter.year=e.target.value; mkFilter.month=""; render(); return; } if(e.target.id==="mkmonth"){ mkFilter.month=e.target.value; render(); return; } if(e.target.id==="bk_empf"){ var m=window.__BK_BEGMAP||{}, k=m[String(e.target.value||"").trim()]; if(k){ var ks=document.getElementById('bk_kat'); if(ks)ks.value=k; } return; } if(e.target.classList.contains("cell-edit")) saveCell(e.target); });
   document.getElementById("page").addEventListener("keydown",function(e){ if(e.target.classList.contains("cell-edit")&&e.key==="Enter"){ e.preventDefault(); e.target.blur(); } });
   function boot(data, keepTab){
     D=data; nav=D.nav; V=D.views; K=D.kpis; AC=D.acdoca||[]; ACATS=D.acats||[];

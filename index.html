@@ -211,6 +211,7 @@ table.alv input.cell-edit,table.alv select.cell-edit{width:100%;min-width:70px;b
 table.alv select.cell-edit{min-width:120px;cursor:pointer}
 table.alv input.cell-edit:focus,table.alv select.cell-edit:focus{outline:2px solid #bcd7fb;border-color:var(--accent)}
 table.alv input.cell-edit:disabled,table.alv select.cell-edit:disabled{opacity:.5}
+.idtag{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;color:var(--muted);white-space:nowrap}
 .toast{position:fixed;bottom:40px;left:50%;transform:translateX(-50%);background:#1d2d3b;color:#fff;font-size:13px;padding:9px 16px;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.2);z-index:200;opacity:0;transition:opacity .2s;pointer-events:none}
 .toast.show{opacity:1}
 .toast.err{background:var(--neg)}
@@ -672,12 +673,13 @@ var ERP_CFG={
     var maxAbs=1; rows.forEach(function(r){maxAbs=Math.max(maxAbs,Math.abs(Number(r[3])||0));});
     var h='<div class="crumb">Global Cash</div><div class="page-head"><h1>Global Cash</h1><span class="muted" style="font-size:12.5px;margin-left:4px">'+rows.length+' Konten</span><span style="flex:1"></span><button class="editbtn" data-edit="F">✎ Bearbeiten</button></div>';
     h+='<section class="tiles">'+tile("Gesamtsaldo",eur(total),"Alle Bankkonten + Verrechnung","big")+tile("Konten",rows.length,"mit Beteiligung Carlos")+'</section>';
-    h+='<div class="panel"><div class="alv-bar"><h2>Bankkonten</h2><span class="count">'+rows.length+'</span></div><div class="alv-wrap"><table class="alv"><thead><tr><th>Bank</th><th>Konto</th><th>Bkr</th><th class="num">Saldo (€)</th><th style="width:150px">Anteil</th></tr></thead><tbody>';
+    h+='<div class="panel"><div class="alv-bar"><h2>Bankkonten</h2><span class="count">'+rows.length+'</span></div><div class="alv-wrap"><table class="alv"><thead><tr><th>ID</th><th>Bank</th><th>Konto</th><th>Bkr</th><th class="num">Saldo (€)</th><th style="width:150px">Anteil</th></tr></thead><tbody>';
     var sorted=rows.map(function(r,i){return {r:r,oi:i};}).sort(function(a,b){return (Number(b.r[3])||0)-(Number(a.r[3])||0);});
     sorted.forEach(function(it){ var r=it.r, stand=Number(r[3])||0, w=Math.max(2,Math.abs(stand)/maxAbs*100), neg=stand<0;
-      h+='<tr class="clickable" data-obj="F:'+it.oi+'"><td class="name">'+esc(r[1])+'</td><td>'+esc(r[2])+'</td><td>'+esc(r[4])+'</td><td class="num'+(neg?' neg':'')+'">'+eur(stand)+'</td><td><div style="height:12px;background:#eef1f3;border-radius:3px;overflow:hidden"><div style="height:100%;width:'+w.toFixed(1)+'%;background:'+(neg?'var(--neg)':'var(--accent)')+';border-radius:3px"></div></div></td></tr>';
+      var accId=(r[0]!=null&&String(r[0]).trim()!=="")?String(r[0]):"—";
+      h+='<tr class="clickable" data-obj="F:'+it.oi+'"><td><span class="idtag">'+esc(accId)+'</span></td><td class="name">'+esc(r[1])+'</td><td>'+esc(r[2])+'</td><td>'+esc(r[4])+'</td><td class="num'+(neg?' neg':'')+'">'+eur(stand)+'</td><td><div style="height:12px;background:#eef1f3;border-radius:3px;overflow:hidden"><div style="height:100%;width:'+w.toFixed(1)+'%;background:'+(neg?'var(--neg)':'var(--accent)')+';border-radius:3px"></div></div></td></tr>';
     });
-    h+='</tbody><tfoot><tr><td>Summe</td><td></td><td></td><td class="num">'+eur(total)+'</td><td></td></tr></tfoot></table></div></div>';
+    h+='</tbody><tfoot><tr><td></td><td>Summe</td><td></td><td></td><td class="num">'+eur(total)+'</td><td></td></tr></tfoot></table></div></div>';
     return h;
   }
   function buchungskreiseHTML(v){

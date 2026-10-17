@@ -326,6 +326,12 @@ var ERP_CFG={
   }
   tabsEl.addEventListener("click",function(e){ var g=e.target.closest("[data-go]"); if(g) go(g.dataset.go); });
   var cur=null, curObj=null, sortState={}, editState={}, AC=[], ACATS=[], ACDOCA_CATLIST=[], ACDOCA_USERRULES=[], acFilter={month:"",kat:""}, mkFilter={};
+  var BUCHCFG={
+    CBUCH:{stream:"Detmold",back:"C",after:"C1",konto:"Hauptbuch Detmold",bkr:"1000"},
+    H1BUCH:{stream:"Marbella",back:"H",after:"H1.2",konto:"Hauptbuch Marbella",bkr:"2020"},
+    H2BUCH:{stream:"OWL-Vermietung",back:"H",after:"H",konto:"Hauptbuch OWL-Vermietung",bkr:"2020"},
+    H3BUCH:{stream:"Industrial",back:"H",after:"H",konto:"Hauptbuch Industrial",bkr:"2030"}
+  };
   function toast(msg,err){ var t=document.getElementById("toast"); if(!t)return; t.textContent=msg; t.className="toast show"+(err?" err":""); clearTimeout(toast._t); toast._t=setTimeout(function(){ t.className="toast"; }, err?6000:1600); }
   function saveCell(inp){
     if(!window.ERP_write){ toast("Speichern nicht verfügbar — bitte neu anmelden.",true); return; }
@@ -685,8 +691,8 @@ var ERP_CFG={
     var fr=(V['F']&&V['F'].rows)||[];
     var labels=fr.filter(function(row){ return /marbella/i.test(String(row[2]||"")); }).map(function(row){ return acctLabel(row); });
     var kontoName=labels[0]||"N26 · Marbella";
-    var all=AC.filter(function(x){ for(var i=0;i<labels.length;i++){ if(acAcctMatch(x.konto,labels[i])) return true; } return false; });
-    var h='<div class="crumb" data-go="H1" style="cursor:pointer">‹ Marbella</div><div class="page-head"><h1>'+esc(t.label)+'</h1><span style="flex:1"></span><span class="count">Quelle: '+esc(kontoName)+'</span></div>';
+    var all=AC.filter(function(x){ if(acNorm(x.obj)==="marbella") return true; for(var i=0;i<labels.length;i++){ if(acAcctMatch(x.konto,labels[i])) return true; } return false; });
+    var h='<div class="crumb" data-go="H" style="cursor:pointer">‹ Business</div><div class="page-head"><h1>'+esc(t.label)+'</h1><span style="flex:1"></span><span class="count">Quelle: '+esc(kontoName)+'</span></div>';
     if(!labels.length){ h+='<div class="panel"><div style="padding:18px"><div class="empty">Kein Marbella-Konto in „Global Cash" gefunden. Lege dort ein Konto mit „Marbella" im Namen an, dann erscheinen hier dessen Kosten.</div></div></div>'; return h; }
     if(!all.length){ h+='<div class="panel"><div style="padding:18px"><div class="empty">Noch keine Buchungen für '+esc(kontoName)+'. Lade auf der Kontoseite (Global Cash → '+esc(kontoName)+') einen Kontoauszug hoch — die Kosten erscheinen dann hier.</div></div></div>'; return h; }
     /* nur Kosten: Ausgaben ohne Umbuchungen; Einnahmen bleiben außen vor */
@@ -733,39 +739,53 @@ var ERP_CFG={
     h+='</tbody></table></div></div>';
     return h;
   }
-  function buchenHTML(){
-    var t=byCode['CBUCH']||{label:'Hauptbuchbelege buchen'}, streamLbl=SHORT['C']||"Detmold", streamTag=acNorm(streamLbl);
+  function businessHTML(){
+    var t=byCode['H']||{label:'Business'};
+    var h=head(SHORT['H']||t.label, t.desc||'Vermietungs- & Investment-Streams');
+    var kids=(t.children||[]), order=[], byGrp={};
+    kids.forEach(function(ch){ var g=ch.group||'Sonstiges'; if(!byGrp[g]){ byGrp[g]=[]; order.push(g); } byGrp[g].push(ch); });
+    order.forEach(function(g){
+      h+='<div class="panel"><div class="alv-bar"><h2>'+esc(g)+'</h2><span class="sp"></span><span class="count">'+byGrp[g].length+'</span></div><div class="gcards" style="padding:16px">';
+      byGrp[g].forEach(function(ch){ var buch=/BUCH$/.test(ch.code), label=buch?'Hauptbuchbelege buchen':String(ch.label||ch.code).replace(/^.*?\s[–-]\s/,''), badge=buch?'＋ Buchen':ch.code;
+        h+='<div class="gcard" data-go="'+ch.code+'"><span class="code">'+esc(badge)+'</span><h3>'+esc(label)+'</h3><p>'+esc(ch.desc||'')+'</p></div>'; });
+      h+='</div></div>';
+    });
+    return h;
+  }
+  function buchenHTML(code){
+    var cfg=BUCHCFG[code]||BUCHCFG.CBUCH, streamLbl=cfg.stream, streamTag=acNorm(streamLbl);
+    var t=byCode[code]||{label:'Hauptbuchbelege buchen'};
     var tx=AC.filter(function(x){ return acNorm(x.obj)===streamTag; });
     var begMap={}; tx.forEach(function(x){ if(x.empf&&x.kat&&x.kat!=="Unklar") begMap[x.empf]=x.kat; }); window.__BK_BEGMAP=begMap;
     var begs=Object.keys(begMap).sort(function(a,b){return a.localeCompare(b);});
     var cats=(ACDOCA_CATLIST.length?ACDOCA_CATLIST.slice():ACDOCA_CATS.slice()); ACATS.forEach(function(c){ if(cats.indexOf(c)<0) cats.push(c); }); if(cats.indexOf("Unklar")<0) cats.push("Unklar");
     var today=new Date().toISOString().slice(0,10);
-    var h='<div class="crumb" data-go="C" style="cursor:pointer">‹ '+esc(streamLbl)+'</div><div class="page-head"><h1>'+esc(t.label)+'</h1></div>';
+    var h='<div class="crumb" data-go="'+cfg.back+'" style="cursor:pointer">‹ '+esc(streamLbl)+'</div><div class="page-head"><h1>'+esc(t.label)+'</h1></div>';
     h+='<div class="panel"><div style="padding:18px"><div class="bform">';
     h+='<div class="two"><div class="row"><label>Datum</label><input type="date" id="bk_datum" value="'+today+'"></div><div class="row"><label>Betrag (€)</label><input id="bk_betrag" inputmode="text" placeholder="-123,45  ·  minus = Ausgabe"></div></div>';
-    h+='<div class="row"><label>Begünstiger</label><input id="bk_empf" list="bk_begs" placeholder="z. B. Stadtwerke Detmold GmbH"><datalist id="bk_begs">'+begs.map(function(b){return '<option value="'+esc(b)+'">';}).join('')+'</datalist></div>';
+    h+='<div class="row"><label>Begünstiger</label><input id="bk_empf" list="bk_begs" placeholder="z. B. Firma / Person"><datalist id="bk_begs">'+begs.map(function(b){return '<option value="'+esc(b)+'">';}).join('')+'</datalist></div>';
     h+='<div class="row"><label>Kategorie</label><select id="bk_kat">'+cats.map(function(c){return '<option>'+esc(c)+'</option>';}).join('')+'</select></div>';
     h+='<div class="row"><label>Verwendungszweck <span class="muted" style="font-weight:400">(optional)</span></label><input id="bk_zweck" placeholder="z. B. Rechnung Nr. …"></div>';
-    h+='<div style="display:flex;gap:12px;align-items:center;margin-top:6px"><button class="editbtn on" data-buchen="1">Beleg buchen</button><span class="muted" style="font-size:12px">→ ACDOCA-Journal (Objekt/Stream = '+esc(streamLbl)+') · erscheint sofort in der Kostenübersicht</span></div>';
+    h+='<div style="display:flex;gap:12px;align-items:center;margin-top:6px"><button class="editbtn on" data-buchen="'+esc(code)+'">Beleg buchen</button><span class="muted" style="font-size:12px">→ ACDOCA-Journal · Objekt/Stream = '+esc(streamLbl)+'</span></div>';
     h+='</div></div></div>';
     h+='<div class="panel"><div class="alv-bar"><h2>Zuletzt gebucht</h2><span class="sp"></span><span class="count">'+tx.length+'</span></div><div class="alv-wrap"><table class="alv"><thead><tr><th>Datum</th><th>Begünstiger</th><th>Kategorie</th><th class="num">Betrag</th></tr></thead><tbody>';
     tx.slice().sort(function(a,b){return a.datum<b.datum?1:-1;}).slice(0,8).forEach(function(x){ var neg=x.betrag<0; h+='<tr><td>'+esc(x.datum)+'</td><td class="name">'+esc(x.empf)+'</td><td>'+esc(x.kat)+'</td><td class="num '+(neg?'neg':'pos')+'">'+eur(x.betrag,2)+'</td></tr>'; });
     h+='</tbody></table></div></div>';
     return h;
   }
-  function doBuchen(){
+  function doBuchen(code){
+    var cfg=BUCHCFG[code]||BUCHCFG.CBUCH;
     if(!window.ERP_append){ toast("Buchen braucht Anmeldung — bitte neu einloggen.",true); return; }
     function gv(id){ var e=document.getElementById(id); return e?String(e.value||"").trim():""; }
     var datum=gv('bk_datum'), empf=gv('bk_empf'), betrag=acDeNum(gv('bk_betrag')), kat=gv('bk_kat'), zweck=gv('bk_zweck');
     if(!datum){ toast("Bitte Datum angeben.",true); return; }
     if(!empf){ toast("Bitte Begünstiger angeben.",true); return; }
     if(!betrag){ toast("Bitte gültigen Betrag angeben (z. B. -123,45).",true); return; }
-    var stream=SHORT['C']||"Detmold";
-    var id="FW"+Date.now().toString(36)+Math.floor(Math.random()*1e3).toString(36);
-    var row=[id,datum,"Hauptbuch "+stream,empf,zweck,betrag,kat||"Unklar","Hauptbuchbeleg","1000","Hauptbuch "+stream,stream,"","Ist",""];
+    var id="HB"+Date.now().toString(36)+Math.floor(Math.random()*1e3).toString(36);
+    var row=[id,datum,cfg.konto,empf,zweck,betrag,kat||"Unklar","Hauptbuchbeleg",cfg.bkr,cfg.konto,cfg.stream,"","Ist",""];
     toast("Buche Beleg …");
     window.ERP_append("ACDOCA",[row]).then(function(){
-      if(window.__SHEETS){ var A=window.__SHEETS['ACDOCA']||(window.__SHEETS['ACDOCA']=[]); A.push(row); boot(parseSheets(window.__SHEETS),'C1'); }
+      if(window.__SHEETS){ var A=window.__SHEETS['ACDOCA']||(window.__SHEETS['ACDOCA']=[]); A.push(row); boot(parseSheets(window.__SHEETS),cfg.after); }
       toast("✓ Beleg gebucht: "+empf+" "+eur(betrag,2));
     }).catch(function(e){ toast("✗ Fehler: "+(e.message||e),true); });
   }
@@ -1120,7 +1140,8 @@ var ERP_CFG={
     if(code==="A"){ p.innerHTML=overviewHTML(); return; }
     if(code==="C"){ p.innerHTML=cOverviewHTML(); return; }
     if(code==="C1"){ p.innerHTML=detmoldHTML(); return; }
-    if(code==="CBUCH"){ p.innerHTML=buchenHTML(); return; }
+    if(/BUCH$/.test(code)){ p.innerHTML=buchenHTML(code); return; }
+    if(code==="H"){ p.innerHTML=businessHTML(); return; }
     if(code==="H1.2"){ p.innerHTML=marbellaKostenHTML(); return; }
     if(code==="E"||/^E[1-5]$/.test(code)){
       if(code==="E1"){ p.innerHTML=noteHTML("E1"); return; }
@@ -1152,7 +1173,7 @@ var ERP_CFG={
     var up=e.target.closest("[data-acupload]"); if(up){ var fi=document.getElementById("acfile"); if(fi) fi.click(); return; }
     var acl=e.target.closest("[data-acclear]"); if(acl){ acFilter.kat=""; render(); return; }
     var ak=e.target.closest("[data-ackat]"); if(ak){ acFilter.kat=(acFilter.kat===ak.dataset.ackat?"":ak.dataset.ackat); render(); return; }
-    var bk=e.target.closest("[data-buchen]"); if(bk){ doBuchen(); return; }
+    var bk=e.target.closest("[data-buchen]"); if(bk){ doBuchen(bk.dataset.buchen); return; }
     var mc=e.target.closest("[data-mkcat]"); if(mc){ var c=mc.dataset.mkcat; if(mkFilter.excl[c]) delete mkFilter.excl[c]; else mkFilter.excl[c]=1; render(); return; }
     var o=e.target.closest("[data-obj]"); if(o){ var pp=o.dataset.obj.split(":"); goObj(pp[0],+pp[1]); return; }
     var b=e.target.closest("[data-back]"); if(b){ go(b.dataset.back); return; }
@@ -1194,7 +1215,7 @@ function parseSheets(S){
     var label=cell('Struktur',r,1),desc=cell('Struktur',r,2);
     var node={code:code,label:label?String(label):code,desc:desc?String(desc):""};
     if(code.length===1){ node.children=[]; nav.push(node); idx[code]=node; }
-    else{ var top=code[0],grp=null; if(top==='H'){grp={"1":"Marbella","2":"OWL-Vermietung","3":"Gewerbl. Vermietung"}[code[1]];} if(grp)node.group=grp; if(idx[top])idx[top].children.push(node); }
+    else{ var top=code[0],grp=null; if(top==='H'){grp={"1":"Marbella","2":"OWL-Vermietung","3":"Industrial"}[code[1]];} if(grp)node.group=grp; if(idx[top])idx[top].children.push(node); }
   }
   var LBL={}; nav.forEach(function(t){LBL[t.code]=t.label;(t.children||[]).forEach(function(ch){LBL[ch.code]=ch.label;});});
   function labelOf(x){ return LBL[x]||x; }
@@ -1295,6 +1316,14 @@ function parseSheets(S){
   }
   if(idx['C']&&idx['C'].children&&!idx['C'].children.some(function(ch){return ch.code==='CBUCH';})){
     idx['C'].children.push({code:'CBUCH',label:'Hauptbuchbelege buchen',desc:'Neue Kosten direkt einbuchen → ACDOCA-Journal'});
+  }
+  if(idx['H']&&idx['H'].children){ var hc=idx['H'].children;
+    [['Marbella','H1BUCH'],['OWL-Vermietung','H2BUCH'],['Industrial','H3BUCH']].forEach(function(pr){
+      if(hc.some(function(ch){return ch.code===pr[1];})) return;
+      var last=-1; for(var hi=0;hi<hc.length;hi++){ if(hc[hi].group===pr[0]) last=hi; }
+      var node={code:pr[1],label:'Hauptbuchbelege buchen',desc:'Neue Kosten direkt einbuchen → ACDOCA-Journal',group:pr[0]};
+      if(last>=0) hc.splice(last+1,0,node); else hc.push(node);
+    });
   }
   // ACDOCA – Buchungsjournal
   var acdoca=[], acatsCount={};

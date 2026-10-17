@@ -94,6 +94,8 @@ table.alv tfoot td{background:#f3f5f6;border-top:1px solid var(--line-strong);fo
 .cg-meta{display:flex;flex-wrap:wrap;gap:6px 20px;margin:0 0 16px;font-size:12.5px;color:var(--ink-2)}
 .cg-meta b{color:var(--ink);font-weight:600}
 .alv th.grp{text-align:center;color:var(--ink-2);font-size:11px;letter-spacing:.04em;text-transform:uppercase;font-weight:600}
+table.alv.cg thead th{font-weight:700;color:var(--ink)}
+table.alv.cg tfoot td{font-weight:700;color:var(--ink)}
 .alv th .sub2{display:block;font-weight:400;font-size:10px;color:var(--ink-3);text-transform:none;letter-spacing:0;margin-top:1px}
 .alv .gsep{border-left:1px solid var(--line-strong)}
 .alv .bold{font-weight:600}
@@ -562,12 +564,6 @@ var ERP_CFG={
       +'<div class="tile"><p class="k">Netto-Auszahlung</p><div class="v" style="color:var(--pos)">'+eur(T.pay)+'</div><div class="d">an Eigentümer nach Honorar</div></div>'
       +'</section>';
     if(!ms.length){ h+='<div class="note-card"><p style="margin:0" class="muted">Noch keine Monatsabrechnungen hinterlegt. Über „✎ Bearbeiten" Zeilen ergänzen.</p></div>'; return h; }
-    var segs=[]; if(T.cg>0)segs.push({label:"Costa Golf (direkt)",value:T.cg,color:"#0070f2"}); if(T.abN>0)segs.push({label:"Airbnb",value:T.abN,color:"#e76500"}); if(T.bkN>0)segs.push({label:"Booking.com",value:T.bkN,color:"#8b5cf6"});
-    if(segs.length>1){ var chTot=T.cg+T.abN+T.bkN;
-      h+='<div class="panel"><div class="alv-bar"><h2>Einnahmen nach Kanal</h2><span class="sp"></span><span class="count">netto '+eur(chTot)+'</span></div><div class="chartrow">'+donutSVG(segs,chTot,eur(chTot),"NETTO")+'<div class="leg">';
-      segs.forEach(function(s){ var pct=chTot?s.value/chTot*100:0; h+='<div class="leg-row"><span class="leg-dot" style="background:'+s.color+'"></span><span class="leg-name">'+esc(s.label)+'</span><span class="leg-val">'+eur(s.value)+'</span><span class="leg-pct">'+pct.toFixed(0)+' %</span></div>'; });
-      h+='</div></div></div>';
-    }
     var hasBk=ms.some(function(r){return N(r,ix.bkBrutto)||N(r,ix.bkProv)||N(r,ix.bkNetto);});
     var hasAb=ms.some(function(r){return N(r,ix.abBrutto)||N(r,ix.abProv)||N(r,ix.abNetto);});
     var hasCG=T.cg>0;
@@ -583,7 +579,7 @@ var ERP_CFG={
       t1+='<th class="grp gsep" colspan="2">Einnahmen</th>'; t2+='<th class="num gsep">netto</th><th class="num">brutto</th>';
       t1+='<th class="grp gsep" colspan="3">Verwaltung</th>'; t2+='<th class="num gsep">Fee</th><th class="num">Honorar</th><th class="num">IVA</th>';
       t1+='<th class="grp gsep" rowspan="2">Auszahlung</th></tr>'; t2+='</tr>';
-      h+='<div class="panel"><div class="alv-bar"><h2>Jahr '+esc(y)+'</h2><span class="count">'+list.length+' Monate</span><span class="sp"></span><span class="count">Auszahlung '+eur(yp)+'</span></div><div class="alv-wrap"><table class="alv"><thead>'+t1+t2+'</thead><tbody>';
+      h+='<div class="panel"><div class="alv-bar"><h2>Jahr '+esc(y)+'</h2><span class="count">'+list.length+' Monate</span><span class="sp"></span><span class="count">Auszahlung '+eur(yp)+'</span></div><div class="alv-wrap"><table class="alv cg"><thead>'+t1+t2+'</thead><tbody>';
       var s={bkb:0,bkp:0,bkn:0,abb:0,abp:0,abn:0,cg:0,netto:0,brutto:0,hon:0,iva:0,pay:0};
       list.forEach(function(r){ var bkb=N(r,ix.bkBrutto),bkp=N(r,ix.bkProv),bkn=N(r,ix.bkNetto),abb=N(r,ix.abBrutto),abp=N(r,ix.abProv),abn=N(r,ix.abNetto),cg=N(r,ix.cg),ne=N(r,ix.netto),br=N(r,ix.brutto),fe=N(r,ix.fee),ho=N(r,ix.hon),iv=N(r,ix.iva),pa=ne-ho-iv;
         s.bkb+=bkb;s.bkp+=bkp;s.bkn+=bkn;s.abb+=abb;s.abp+=abp;s.abn+=abn;s.cg+=cg;s.netto+=ne;s.brutto+=br;s.hon+=ho;s.iva+=iv;s.pay+=pa;

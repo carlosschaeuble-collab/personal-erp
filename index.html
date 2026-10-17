@@ -668,7 +668,7 @@ var ERP_CFG={
     var warns=[], used={}; Object.keys(acctBy).forEach(function(k){used[k]=1;}); Object.keys(bkBy).forEach(function(k){used[k]=1;});
     Object.keys(used).sort().forEach(function(k){ if(!keySet.hasOwnProperty(k)){ var det=[]; if(acctBy[k])det.push(acctBy[k].length+" Konto/Konten"); if(bkBy[k])det.push(bkBy[k].n+" Buchungen"); warns.push(["Unbekannter Schlüssel „"+k+"\"","wird verwendet ("+det.join(", ")+"), ist aber nicht in B2 definiert."]); } });
     frows.forEach(function(r){ var assigned=nk(r[4]); var sug={}; (String(r[2]||"").toLowerCase().match(/[a-zäöüß]{3,}/g)||[]).forEach(function(w){ if(tok2[w]&&!amb[w])sug[tok2[w]]=1; }); var sk=Object.keys(sug); if(sk.length&&sk.indexOf(assigned)<0){ var s=sk[0]; warns.push(["Konto „"+acctLabel(r)+"\"","hängt an "+(assigned||"–")+" ("+(keySet[assigned]||"nicht in B2")+"), Name deutet auf "+s+" ("+keySet[s]+")."]); } });
-    var h='<div class="crumb">Allgemeines › Buchungskreise</div><div class="page-head"><h1>Buchungskreise</h1><span class="muted" style="font-size:12.5px;margin-left:4px">Konsistenz-Check · Stammdaten in B2 (Google Sheet)</span></div>';
+    var h='<div class="crumb">Allgemeines › Buchungskreise</div><div class="page-head"><h1>Buchungskreise</h1><span class="muted" style="font-size:12.5px;margin-left:4px">Konsistenz-Check</span><span style="flex:1"></span><button class="editbtn" data-edit="B2">✎ Stammdaten bearbeiten</button></div>';
     h+='<div class="panel"><div class="alv-bar"><h2>Prüfung</h2><span class="sp"></span><span class="count">'+warns.length+(warns.length===1?' Hinweis':' Hinweise')+'</span></div><div style="padding:14px 16px 16px">';
     if(warns.length) warns.forEach(function(w){ h+='<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--grid-line)"><span style="color:var(--crit);flex:0 0 auto">▲</span><div><div style="font-weight:600;font-size:13px">'+esc(w[0])+'</div><div class="muted" style="font-size:12.5px">'+esc(w[1])+'</div></div></div>'; });
     else h+='<div class="empty" style="color:var(--pos)">✓ Alles konsistent — alle verwendeten Buchungskreise sind in B2 definiert, keine erkennbaren Fehlzuordnungen.</div>';
@@ -1260,7 +1260,7 @@ function parseSheets(S){
   function gridview(code,title,cols,rows,sum_idx,money_idx,src){ views[code]={kind:"grid",title:title,cols:cols,rows:rows,sum_idx:(sum_idx==null?null:sum_idx),money_idx:money_idx||[],src:src||null}; }
   var e;
   e=extract('B1',2); gridview('B1','Business Partner',e.cols,e.rows,null,null,{sheet:'B1',srcRows:e.srcRows,headerRow:e.headerRow,edit:"auto"});
-  e=extract('B2',2,6); gridview('B2','Buchungskreise',e.cols,e.rows);
+  e=extract('B2',2,6); gridview('B2','Buchungskreise',e.cols,e.rows,null,null,{sheet:'B2',srcRows:e.srcRows,headerRow:e.headerRow,edit:"auto"});
   var rowsB3=[],srcB3=[]; for(r=2;r<maxRow('B3');r++){ var a=cell('B3',r,0); if(!a)continue; rowsB3.push([a,cell('B3',r,1),cell('B3',r,2),num(cell('B3',r,3))]); srcB3.push(r); }
   gridview('B3','Immobilienwerte',['Objekt','Ort','Bkr','Wert (€)'],rowsB3,3,[3],{sheet:'B3',srcRows:srcB3,headerRow:1,edit:mapCols(0,4)});
   var rowsF=[],srcF=[]; for(r=1;r<maxRow('F');r++){ var bank=cell('F',r,1); if(!bank||String(bank).trim()==="Summe")continue; rowsF.push([cell('F',r,0),bank,cell('F',r,2),num(cell('F',r,3)),cell('F',r,4),num(cell('F',r,3))]); srcF.push(r); }

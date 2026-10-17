@@ -658,6 +658,26 @@ var ERP_CFG={
     h+='</tbody><tfoot><tr><td>Summe</td><td></td><td></td><td class="num">'+eur(total)+'</td><td></td></tr></tfoot></table></div></div>';
     return h;
   }
+  function buchungskreiseHTML(v){
+    function nk(x){ if(x==null||x==="")return ""; var s=String(x).trim(); var n=parseFloat(s); return isNaN(n)?s:String(Math.round(n)); }
+    var circles=v.rows||[], keySet={}; circles.forEach(function(r){ var k=nk(r[1]); if(k)keySet[k]=r[2]||""; });
+    var frows=(V['F']&&V['F'].rows)||[], acctBy={};
+    frows.forEach(function(r){ var k=nk(r[4]); if(!k)return; (acctBy[k]=acctBy[k]||[]).push(acctLabel(r)); });
+    var bkBy={}; AC.forEach(function(x){ var k=nk(x.bkr); if(!k)return; if(!bkBy[k])bkBy[k]={n:0,sum:0}; bkBy[k].n++; bkBy[k].sum+=x.betrag; });
+    var tok2={},amb={}; Object.keys(keySet).forEach(function(k){ (String(keySet[k]).toLowerCase().match(/[a-zäöüß]{3,}/g)||[]).forEach(function(w){ if(tok2[w]&&tok2[w]!==k)amb[w]=1; else tok2[w]=k; }); });
+    var warns=[], used={}; Object.keys(acctBy).forEach(function(k){used[k]=1;}); Object.keys(bkBy).forEach(function(k){used[k]=1;});
+    Object.keys(used).sort().forEach(function(k){ if(!keySet.hasOwnProperty(k)){ var det=[]; if(acctBy[k])det.push(acctBy[k].length+" Konto/Konten"); if(bkBy[k])det.push(bkBy[k].n+" Buchungen"); warns.push(["Unbekannter Schlüssel „"+k+"\"","wird verwendet ("+det.join(", ")+"), ist aber nicht in B2 definiert."]); } });
+    frows.forEach(function(r){ var assigned=nk(r[4]); var sug={}; (String(r[2]||"").toLowerCase().match(/[a-zäöüß]{3,}/g)||[]).forEach(function(w){ if(tok2[w]&&!amb[w])sug[tok2[w]]=1; }); var sk=Object.keys(sug); if(sk.length&&sk.indexOf(assigned)<0){ var s=sk[0]; warns.push(["Konto „"+acctLabel(r)+"\"","hängt an "+(assigned||"–")+" ("+(keySet[assigned]||"nicht in B2")+"), Name deutet auf "+s+" ("+keySet[s]+")."]); } });
+    var h='<div class="crumb">Allgemeines › Buchungskreise</div><div class="page-head"><h1>Buchungskreise</h1><span class="muted" style="font-size:12.5px;margin-left:4px">Konsistenz-Check · Stammdaten in B2 (Google Sheet)</span></div>';
+    h+='<div class="panel"><div class="alv-bar"><h2>Prüfung</h2><span class="sp"></span><span class="count">'+warns.length+(warns.length===1?' Hinweis':' Hinweise')+'</span></div><div style="padding:14px 16px 16px">';
+    if(warns.length) warns.forEach(function(w){ h+='<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--grid-line)"><span style="color:var(--crit);flex:0 0 auto">▲</span><div><div style="font-weight:600;font-size:13px">'+esc(w[0])+'</div><div class="muted" style="font-size:12.5px">'+esc(w[1])+'</div></div></div>'; });
+    else h+='<div class="empty" style="color:var(--pos)">✓ Alles konsistent — alle verwendeten Buchungskreise sind in B2 definiert, keine erkennbaren Fehlzuordnungen.</div>';
+    h+='</div></div>';
+    h+='<div class="panel"><div class="alv-bar"><h2>Je Buchungskreis</h2><span class="muted" style="font-size:12px;margin-left:6px">(klick = Details)</span><span class="sp"></span><span class="count">'+circles.length+'</span></div><div class="alv-wrap"><table class="alv"><thead><tr><th>Schlüssel</th><th>Name</th><th>Notiz</th><th class="num">Konten</th><th class="num">Buchungen</th><th class="num">Summe</th></tr></thead><tbody>';
+    circles.forEach(function(r,oi){ var k=nk(r[1]), na=acctBy[k]?acctBy[k].length:0, bb=bkBy[k]||{n:0,sum:0}; h+='<tr data-obj="B2:'+oi+'" style="cursor:pointer"><td class="name">'+esc(r[1])+'</td><td>'+esc(r[2]||"")+'</td><td class="muted">'+esc(r[3]||"")+'</td><td class="num">'+na+'</td><td class="num">'+bb.n+'</td><td class="num">'+eur(bb.sum,0)+'</td></tr>'; });
+    h+='</tbody></table></div></div>';
+    return h;
+  }
   function partnersHTML(v, code){
     var cols=v.cols, rows=v.rows;
     function ci(re){ for(var i=0;i<cols.length;i++){ if(re.test(cols[i])) return i; } return -1; }
@@ -1152,7 +1172,7 @@ var ERP_CFG={
     }
     var v=V[code];
     if(v){
-      if(v.kind==="grid"){ if(code==="B1"&&!editState["B1"]) p.innerHTML=partnersHTML(v,code); else if(code==="F"&&!editState["F"]) p.innerHTML=cashHTML(v,code); else if(code==="G"&&!editState["G"]) p.innerHTML=arapHTML(v,code); else if(code==="H1.1"&&v.costagolf&&!editState["H1.1"]) p.innerHTML=costaGolfHTML(v); else p.innerHTML=gridHTML(v,code); }
+      if(v.kind==="grid"){ if(code==="B1"&&!editState["B1"]) p.innerHTML=partnersHTML(v,code); else if(code==="B2"&&!editState["B2"]) p.innerHTML=buchungskreiseHTML(v); else if(code==="F"&&!editState["F"]) p.innerHTML=cashHTML(v,code); else if(code==="G"&&!editState["G"]) p.innerHTML=arapHTML(v,code); else if(code==="H1.1"&&v.costagolf&&!editState["H1.1"]) p.innerHTML=costaGolfHTML(v); else p.innerHTML=gridHTML(v,code); }
       else if(v.kind==="invest") p.innerHTML=investHTML(v);
       else if(v.kind==="guv") p.innerHTML=guvHTML(v);
       else if(v.kind==="keyvalue") p.innerHTML=keyvalueHTML(v);

@@ -526,15 +526,16 @@ var ERP_CFG={
     return h;
   }
   function arapOverviewHTML(){
-    var v=V['G'], ford=[],verb=[],fSum=0,vSum=0;
-    if(v&&v.rows) v.rows.forEach(function(r){ var sal=Number(r[8])||0, name=String(r[2]||r[1]||"").trim()||"—"; if(sal>=0){ford.push({name:name,amt:sal});fSum+=sal;} else {verb.push({name:name,amt:sal});vSum+=sal;} });
-    verb.sort(function(a,b){return a.amt-b.amt;});
+    var rows=(V['G']&&V['G'].rows)||[], verb=[], fSum=0, vSum=0;
+    rows.forEach(function(r){ var art=String(r[1]||""), name=String(r[2]||"").trim()||"—", betrag=Number(r[4])||0, miete=Number(r[5])||0;
+      if(/^Forderung/i.test(art)){ fSum+=betrag; } else { var amt=betrag||miete; verb.push({name:name,amt:amt}); vSum+=amt; } });
+    verb.sort(function(a,b){return b.amt-a.amt;});
     var max=1; verb.forEach(function(x){max=Math.max(max,Math.abs(x.amt));});
     var h='<div class="panel"><div class="alv-bar"><h2>Forderungen &amp; Verbindlichkeiten</h2><span class="sp"></span><span class="ovlink" data-go="G">Alle ›</span></div>';
-    h+='<div class="cf-sum"><div class="cf-s"><span class="k">Forderungen</span><span class="v pos">'+eur(fSum)+'</span></div><div class="cf-s"><span class="k">Verbindlichkeiten</span><span class="v neg">'+eur(vSum)+'</span></div></div>';
+    h+='<div class="cf-sum"><div class="cf-s"><span class="k">Forderungen</span><span class="v pos">'+eur(fSum)+'</span></div><div class="cf-s"><span class="k">Verbindlichkeiten</span><span class="v neg">'+eur(-vSum)+'</span></div></div>';
     h+='<div style="padding:4px 16px 16px">';
     if(!verb.length) h+='<div class="empty">Keine Verbindlichkeiten erfasst.</div>';
-    else verb.slice(0,5).forEach(function(x){ var w=Math.max(1.5,Math.abs(x.amt)/max*100); h+='<div class="bar-row"><div class="bl" title="'+esc(x.name)+'">'+esc(x.name)+'</div><div class="bt"><div class="bf neg" style="width:'+w.toFixed(1)+'%"></div></div><div class="bv neg">'+eur(x.amt)+'</div></div>'; });
+    else verb.slice(0,5).forEach(function(x){ var w=Math.max(1.5,Math.abs(x.amt)/max*100); h+='<div class="bar-row"><div class="bl" title="'+esc(x.name)+'">'+esc(x.name)+'</div><div class="bt"><div class="bf neg" style="width:'+w.toFixed(1)+'%"></div></div><div class="bv neg">'+eur(-x.amt)+'</div></div>'; });
     if(verb.length>5) h+='<div class="muted" style="font-size:12px;padding:2px 2px 0">+'+(verb.length-5)+' weitere</div>';
     h+='</div></div>';
     return h;

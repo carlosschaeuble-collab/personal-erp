@@ -181,6 +181,8 @@ table.alv.cg tfoot td,table.alv.guv tfoot td{font-weight:700;color:var(--ink)}
 @media(max-width:880px){.ov-cols{grid-template-columns:1fr}}
 .ov-cols .bar-row .bl{width:auto;flex:1 1 38%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ov-cols .bar-row .bv{width:auto;min-width:94px}
+.ovlink{cursor:pointer;color:var(--accent);font-size:12.5px;font-weight:500}
+.ovlink:hover{text-decoration:underline}
 .cf-sum{display:flex;gap:10px;flex-wrap:wrap;padding:14px 16px 4px}
 .cf-s{flex:1 1 150px;background:var(--alv-head);border:1px solid var(--grid-line);border-radius:8px;padding:9px 12px;display:flex;flex-direction:column;gap:2px}
 .cf-s .k{font-size:11px;color:var(--status-ink);text-transform:uppercase;letter-spacing:.3px}
@@ -483,8 +485,8 @@ var ERP_CFG={
     h+=tile("Liquid Assets",eur(K.liquid),"Wertpapiere · Krypto · Edelmetalle");
     h+=tile("Real Estate",eur(K.realestate),"Immobilienwerte");
     h+='</section>';
-    h+=cashflowHTML();
     h+='<div class="ov-cols">'+compDonutHTML()+bkrBreakHTML()+'</div>';
+    h+='<div class="ov-cols">'+arapOverviewHTML()+kontenOverviewHTML()+'</div>';
     h+='<div class="panel"><div style="padding:11px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap"><div style="flex:1;min-width:220px"><div style="font-weight:500;font-size:13px">🎨 Google-Sheet formatieren</div><div class="muted" style="font-size:12px">Kopfzeilen fixieren, Spaltenbreiten, Buchungskreis-Dropdowns ins Sheet.</div></div><button class="editbtn" data-fmt="1">✨ Formatieren</button></div></div>';
     return h;
   }
@@ -520,8 +522,35 @@ var ERP_CFG={
     h+='<div class="leg">';
     if(segs.length) segs.forEach(function(s){ var pct=assets?s.value/assets*100:0; h+='<div class="leg-row"><span class="leg-dot" style="background:'+s.color+'"></span><span class="leg-name">'+esc(s.label)+'</span><span class="leg-val">'+eur(s.value)+'</span><span class="leg-pct">'+pct.toFixed(0)+' %</span></div>'; });
     else h+='<div class="empty">Keine Vermögenswerte erfasst.</div>';
-    if(K.arap) h+='<div class="leg-row"><span class="leg-dot" style="background:var(--neg)"></span><span class="leg-name">'+(K.arap<0?'Verbindlichkeiten':'Forderungen')+'</span><span class="leg-val'+(K.arap<0?' neg':'')+'">'+eur(K.arap)+'</span><span class="leg-pct"></span></div>';
     h+='</div></div></div>';
+    return h;
+  }
+  function arapOverviewHTML(){
+    var v=V['G'], ford=[],verb=[],fSum=0,vSum=0;
+    if(v&&v.rows) v.rows.forEach(function(r){ var sal=Number(r[8])||0, name=String(r[2]||r[1]||"").trim()||"—"; if(sal>=0){ford.push({name:name,amt:sal});fSum+=sal;} else {verb.push({name:name,amt:sal});vSum+=sal;} });
+    verb.sort(function(a,b){return a.amt-b.amt;});
+    var max=1; verb.forEach(function(x){max=Math.max(max,Math.abs(x.amt));});
+    var h='<div class="panel"><div class="alv-bar"><h2>Forderungen &amp; Verbindlichkeiten</h2><span class="sp"></span><span class="ovlink" data-go="G">Alle ›</span></div>';
+    h+='<div class="cf-sum"><div class="cf-s"><span class="k">Forderungen</span><span class="v pos">'+eur(fSum)+'</span></div><div class="cf-s"><span class="k">Verbindlichkeiten</span><span class="v neg">'+eur(vSum)+'</span></div></div>';
+    h+='<div style="padding:4px 16px 16px">';
+    if(!verb.length) h+='<div class="empty">Keine Verbindlichkeiten erfasst.</div>';
+    else verb.slice(0,5).forEach(function(x){ var w=Math.max(1.5,Math.abs(x.amt)/max*100); h+='<div class="bar-row"><div class="bl" title="'+esc(x.name)+'">'+esc(x.name)+'</div><div class="bt"><div class="bf neg" style="width:'+w.toFixed(1)+'%"></div></div><div class="bv neg">'+eur(x.amt)+'</div></div>'; });
+    if(verb.length>5) h+='<div class="muted" style="font-size:12px;padding:2px 2px 0">+'+(verb.length-5)+' weitere</div>';
+    h+='</div></div>';
+    return h;
+  }
+  function kontenOverviewHTML(){
+    var v=V['F'], accts=((v&&v.rows)||[]).map(function(r){ return {name:((r[1]||"")+" · "+(r[2]||"")).replace(/^ · | · $/,"").replace(/ · $/,""), bal:Number(r[3])||0}; }).filter(function(a){return a.name;});
+    accts.sort(function(a,b){return b.bal-a.bal;});
+    var max=1; accts.forEach(function(a){max=Math.max(max,Math.abs(a.bal));});
+    var total=accts.reduce(function(s,a){return s+a.bal;},0);
+    var h='<div class="panel"><div class="alv-bar"><h2>Konten auf einen Blick</h2><span class="sp"></span><span class="ovlink" data-go="F">Alle ›</span></div>';
+    h+='<div class="cf-sum"><div class="cf-s"><span class="k">Gesamtsaldo</span><span class="v'+(total<0?' neg':' pos')+'">'+eur(total)+'</span></div><div class="cf-s"><span class="k">Konten</span><span class="v">'+accts.length+'</span></div></div>';
+    h+='<div style="padding:4px 16px 16px">';
+    if(!accts.length) h+='<div class="empty">Keine Konten erfasst.</div>';
+    else accts.slice(0,6).forEach(function(a){ var w=Math.max(1.5,Math.abs(a.bal)/max*100); h+='<div class="bar-row"><div class="bl" title="'+esc(a.name)+'">'+esc(a.name)+'</div><div class="bt"><div class="bf'+(a.bal<0?' neg':'')+'" style="width:'+w.toFixed(1)+'%"></div></div><div class="bv'+(a.bal<0?' neg':'')+'">'+eur(a.bal)+'</div></div>'; });
+    if(accts.length>6) h+='<div class="muted" style="font-size:12px;padding:2px 2px 0">+'+(accts.length-6)+' weitere</div>';
+    h+='</div></div>';
     return h;
   }
   function bkrBreakHTML(){
@@ -1465,8 +1494,8 @@ function parseSheets(S){
   var liquid=wpS+krS+emS;
   var realestate=0; rowsB3.forEach(function(x){realestate+=x[3]||0;});
   var sonstige=0; for(r=3;r<5;r++){ sonstige+=num(cell('I2',r,2))||0; }
-  var arap=0; rowsG.forEach(function(x){arap+=x[8];});
-  var kpis={networth:Math.round(cash+liquid+realestate+sonstige+arap),cash:Math.round(cash),liquid:Math.round(liquid),realestate:Math.round(realestate),sonstige:Math.round(sonstige),arap:Math.round(arap),wp:Math.round(wpS),kr:Math.round(krS),em:Math.round(emS)};
+  var arap=0,ford=0,verb=0; rowsG.forEach(function(x){ arap+=x[8]; if(x[8]>=0)ford+=x[8]; else verb+=x[8]; });
+  var kpis={networth:Math.round(cash+liquid+realestate+sonstige+arap),cash:Math.round(cash),liquid:Math.round(liquid),realestate:Math.round(realestate),sonstige:Math.round(sonstige),arap:Math.round(arap),ford:Math.round(ford),verb:Math.round(verb),wp:Math.round(wpS),kr:Math.round(krS),em:Math.round(emS)};
   // bkr drilldown
   var bkr={}, ciS2=-1,ciN2=-1; for(var cb2=0;cb2<10;cb2++){ var hs2=String(cell('B2',hrB2,cb2)||""); if(/schl(ü|ue)ssel/i.test(hs2))ciS2=cb2; else if(/^\s*name/i.test(hs2))ciN2=cb2; } if(ciS2<0)ciS2=1; if(ciN2<0)ciN2=2;
   var bkrDefs=[];

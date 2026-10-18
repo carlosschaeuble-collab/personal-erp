@@ -176,6 +176,22 @@ table.alv.cg tfoot td,table.alv.guv tfoot td{font-weight:700;color:var(--ink)}
 .leg{flex:1 1 240px;min-width:210px}
 .leg-row{display:flex;align-items:center;gap:11px;padding:9px 4px;border-bottom:1px solid var(--grid-line)}
 .leg-row:last-child{border-bottom:0}
+.ov-cols{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+.ov-cols .panel{margin-bottom:0}
+@media(max-width:880px){.ov-cols{grid-template-columns:1fr}}
+.ov-cols .bar-row .bl{width:auto;flex:1 1 38%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ov-cols .bar-row .bv{width:auto;min-width:94px}
+.cf-sum{display:flex;gap:10px;flex-wrap:wrap;padding:14px 16px 4px}
+.cf-s{flex:1 1 150px;background:var(--alv-head);border:1px solid var(--grid-line);border-radius:8px;padding:9px 12px;display:flex;flex-direction:column;gap:2px}
+.cf-s .k{font-size:11px;color:var(--status-ink);text-transform:uppercase;letter-spacing:.3px}
+.cf-s .v{font-size:17px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--ink)}
+.cf-s .v.pos{color:var(--pos)}.cf-s .v.neg{color:var(--neg)}
+.cf-wrap{padding:8px 12px 2px;overflow-x:auto}
+.cfchart{display:block;min-width:300px}
+.cfchart .cf-lbl{font-size:9px;fill:var(--status-ink)}
+.cfchart .cf-val{font-size:8.5px;fill:var(--status-ink);font-variant-numeric:tabular-nums}
+.cf-legend{display:flex;gap:16px;flex-wrap:wrap;align-items:center;padding:6px 16px 14px;font-size:12px;color:var(--ink-2)}
+.cf-legend .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
 .leg-dot{width:11px;height:11px;border-radius:3px;flex:0 0 auto}
 .leg-name{flex:1;color:var(--ink);font-size:13px}
 .leg-val{font-variant-numeric:tabular-nums;font-weight:600;font-size:13px}
@@ -467,23 +483,57 @@ var ERP_CFG={
     h+=tile("Liquid Assets",eur(K.liquid),"Wertpapiere · Krypto · Edelmetalle");
     h+=tile("Real Estate",eur(K.realestate),"Immobilienwerte");
     h+='</section>';
-    h+=compositionHTML();
-    h+='<div class="panel"><div class="alv-bar"><h2>News</h2><span class="sp"></span><span class="count">Börse + ARD</span></div><div style="padding:6px 14px 10px"><div class="news">'
-      +newsItem("Börse","DAX startet fester in den Handel — Tech-Werte gefragt")
-      +newsItem("Börse","EZB-Sitzung: Markt erwartet unveränderte Zinsen")
-      +newsItem("ARD","Tagesschau: Aktuelle Nachrichten (Platzhalter)")
-      +'</div><p class="muted" style="font-size:12px;margin:8px 2px 0">Live-Feed (Börsennews + ARD) wird in einem späteren Schritt angebunden.</p></div></div>';
-    h+='<div class="panel"><div style="padding:14px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap"><div style="flex:1;min-width:220px"><div style="font-weight:500;font-size:14px;margin-bottom:3px">🎨 Google-Sheet übersichtlich formatieren</div><div class="muted" style="font-size:12.5px">Kopfzeilen hervorheben &amp; fixieren, Spaltenbreiten anpassen, Buchungskreis-Dropdowns anlegen — damit klar ist, wo was eingetragen wird. Formatiert dein Sheet direkt im Drive.</div></div><button class="editbtn" data-fmt="1">✨ Jetzt formatieren</button></div></div>';
+    h+=cashflowHTML();
+    h+='<div class="ov-cols">'+compDonutHTML()+bkrBreakHTML()+'</div>';
+    h+='<div class="panel"><div style="padding:11px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap"><div style="flex:1;min-width:220px"><div style="font-weight:500;font-size:13px">🎨 Google-Sheet formatieren</div><div class="muted" style="font-size:12px">Kopfzeilen fixieren, Spaltenbreiten, Buchungskreis-Dropdowns ins Sheet.</div></div><button class="editbtn" data-fmt="1">✨ Formatieren</button></div></div>';
     return h;
   }
   function tile(k,v,d,big){ return '<div class="tile'+(big?' big':'')+'"><p class="k">'+esc(k)+'</p><div class="v">'+v+'</div>'+(d?'<div class="d'+(/-/.test(v)?' neg':'')+'">'+esc(d)+'</div>':'')+'</div>'; }
-  function compositionHTML(){
-    var items=[["Immobilien",K.realestate,0],["Cash",K.cash,0],["Liquid Assets",K.liquid,0],["Sonstiges",K.sonstige,0],["Verbindlichkeiten",K.arap,1]];
-    var max=Math.max.apply(null,items.map(function(x){return Math.abs(x[1])||0;}))||1;
-    var h='<div class="panel"><div class="alv-bar"><h2>Vermögens-Zusammensetzung</h2><span class="sp"></span><span class="count">Net Worth '+eur(K.networth)+'</span></div><div style="padding:14px 16px 16px">';
-    items.forEach(function(it){ var w=Math.max(1.5,Math.abs(it[1])/max*100);
-      h+='<div class="bar-row"><div class="bl">'+esc(it[0])+'</div><div class="bt"><div class="bf'+(it[2]?' neg':'')+'" style="width:'+w.toFixed(1)+'%"></div></div><div class="bv'+(it[1]<0?' neg':'')+'">'+eur(it[1])+'</div></div>'; });
-    h+='</div></div>'; return h;
+  function cashflowHTML(){
+    var m={}; AC.forEach(function(x){ if(/^Umbuchung/i.test(x.kat||""))return; var k=String(x.datum||"").slice(0,7); if(!/^\d{4}-\d{2}$/.test(k))return; if(!m[k])m[k]={ein:0,aus:0}; var b=Number(x.betrag)||0; if(b>=0)m[k].ein+=b; else m[k].aus+=b; });
+    var keys=Object.keys(m).sort();
+    var h='<div class="panel"><div class="alv-bar"><h2>Monatlicher Cashflow</h2>';
+    if(!keys.length) return h+'</div><div style="padding:16px"><div class="empty">Noch keine Buchungen im Journal — lade Kontoauszüge hoch oder buche Hauptbuchbelege.</div></div>';
+    var yr=keys[keys.length-1].slice(0,4), yEin=0,yAus=0; keys.forEach(function(k){ if(k.slice(0,4)===yr){ yEin+=m[k].ein; yAus+=m[k].aus; } }); var ySaldo=yEin+yAus;
+    var last=keys.slice(-12), MN=["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
+    function mlbl(k){ var p=k.split("-"); return MN[(+p[1]||1)-1]+" "+p[0].slice(2); }
+    var maxAbs=1; last.forEach(function(k){ maxAbs=Math.max(maxAbs,Math.abs(m[k].ein+m[k].aus)); });
+    var colW=Math.max(40,Math.min(64,Math.round(680/last.length))), W=last.length*colW, H=168, zeroY=92, barMax=64, bw=Math.min(28,colW-16);
+    var bars="",lbls="";
+    last.forEach(function(k,i){ var sal=m[k].ein+m[k].aus, bh=Math.max(1,Math.abs(sal)/maxAbs*barMax), cx=i*colW+colW/2, pos=sal>=0, y=pos?zeroY-bh:zeroY;
+      bars+='<rect x="'+(cx-bw/2).toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+bh.toFixed(1)+'" rx="2.5" fill="'+(pos?'var(--pos)':'var(--neg)')+'"><title>'+esc(mlbl(k))+' · Saldo '+eur(sal)+' (Einnahmen '+eur(m[k].ein)+' · Ausgaben '+eur(m[k].aus)+')</title></rect>';
+      lbls+='<text x="'+cx.toFixed(1)+'" y="'+(H-6)+'" text-anchor="middle" class="cf-lbl">'+esc(mlbl(k))+'</text>';
+    });
+    var svg='<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="'+H+'" preserveAspectRatio="xMidYMid meet" class="cfchart"><line x1="0" y1="'+zeroY+'" x2="'+W+'" y2="'+zeroY+'" stroke="var(--grid-line)"/>'+bars+lbls+'</svg>';
+    h+='<span class="sp"></span><span class="count">'+esc(yr)+'</span></div>';
+    h+='<div class="cf-sum"><div class="cf-s"><span class="k">Einnahmen '+esc(yr)+'</span><span class="v pos">'+eur(yEin)+'</span></div><div class="cf-s"><span class="k">Ausgaben '+esc(yr)+'</span><span class="v neg">'+eur(yAus)+'</span></div><div class="cf-s"><span class="k">Saldo '+esc(yr)+'</span><span class="v '+(ySaldo<0?'neg':'pos')+'">'+(ySaldo>=0?'+':'')+eur(ySaldo)+'</span></div></div>';
+    h+='<div class="cf-wrap">'+svg+'</div>';
+    h+='<div class="cf-legend"><span><i class="dot" style="background:var(--pos)"></i>Überschuss</span><span><i class="dot" style="background:var(--neg)"></i>Defizit</span><span class="muted">Netto-Saldo je Monat, ohne Umbuchungen</span></div>';
+    h+='</div>';
+    return h;
+  }
+  function compDonutHTML(){
+    var segs=[{label:"Immobilien",value:K.realestate,color:"#8b5cf6"},{label:"Cash",value:K.cash,color:"#0070f2"},{label:"Liquid Assets",value:K.liquid,color:"#0aa5a5"},{label:"Sonstiges",value:K.sonstige,color:"#e9730c"}].filter(function(s){return s.value>0;});
+    var assets=segs.reduce(function(a,s){return a+s.value;},0);
+    var h='<div class="panel"><div class="alv-bar"><h2>Vermögen</h2><span class="sp"></span><span class="count">Net Worth '+eur(K.networth)+'</span></div><div class="chartrow">';
+    h+=donutSVG(segs,assets,eur(assets,0),"VERMÖGEN");
+    h+='<div class="leg">';
+    if(segs.length) segs.forEach(function(s){ var pct=assets?s.value/assets*100:0; h+='<div class="leg-row"><span class="leg-dot" style="background:'+s.color+'"></span><span class="leg-name">'+esc(s.label)+'</span><span class="leg-val">'+eur(s.value)+'</span><span class="leg-pct">'+pct.toFixed(0)+' %</span></div>'; });
+    else h+='<div class="empty">Keine Vermögenswerte erfasst.</div>';
+    if(K.arap) h+='<div class="leg-row"><span class="leg-dot" style="background:var(--neg)"></span><span class="leg-name">'+(K.arap<0?'Verbindlichkeiten':'Forderungen')+'</span><span class="leg-val'+(K.arap<0?' neg':'')+'">'+eur(K.arap)+'</span><span class="leg-pct"></span></div>';
+    h+='</div></div></div>';
+    return h;
+  }
+  function bkrBreakHTML(){
+    var list=(D&&D.bkrList)||[], map=(D&&D.bkr)||{};
+    var rows=list.map(function(e){ return {name:e.name||e.schluessel, sum:(map[e.schluessel]||{}).sum||0}; }).filter(function(r){return Math.abs(r.sum)>0.5;});
+    rows.sort(function(a,b){return b.sum-a.sum;});
+    var max=1; rows.forEach(function(r){max=Math.max(max,Math.abs(r.sum));});
+    var h='<div class="panel"><div class="alv-bar"><h2>Vermögen je Buchungskreis</h2><span class="sp"></span><span class="count">'+rows.length+'</span></div><div style="padding:14px 16px 16px">';
+    if(!rows.length) h+='<div class="empty">Noch keine zugeordneten Werte.</div>';
+    rows.forEach(function(r){ var w=Math.max(1.5,Math.abs(r.sum)/max*100); h+='<div class="bar-row"><div class="bl" title="'+esc(r.name)+'">'+esc(r.name)+'</div><div class="bt"><div class="bf'+(r.sum<0?' neg':'')+'" style="width:'+w.toFixed(1)+'%"></div></div><div class="bv'+(r.sum<0?' neg':'')+'">'+eur(r.sum)+'</div></div>'; });
+    h+='</div></div>';
+    return h;
   }
   function newsItem(tag,txt){ return '<div class="item"><span class="tag">'+tag+'</span><span>'+esc(txt)+'</span></div>'; }
   function donutSVG(segs,total,big,small){

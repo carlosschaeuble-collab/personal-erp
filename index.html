@@ -402,9 +402,9 @@ var ERP_CFG={
   // Buchungskreise aus Reiter B2 (Dropdown „Schlüssel – Name", schreibt den Schlüssel)
   function bkrSelect(a1,sheet,srow,scol,val){
     function nbk(x){ if(x==null||x==="")return ""; var n=parseFloat(x); return isNaN(n)?String(x).trim():String(Math.round(n)); }
-    var map=(typeof D!=="undefined"&&D&&D.bkr)||{}, keys=Object.keys(map).sort(), cur=nbk(val), found=false;
+    var list=(typeof D!=="undefined"&&D&&D.bkrList)||[], cur=nbk(val), found=false;
     var o='<option value=""'+(cur===""?' selected':'')+'>—</option>';
-    keys.forEach(function(k){ var sel=k===cur; if(sel)found=true; var nm=map[k]&&map[k].name; o+='<option value="'+esc(k)+'"'+(sel?' selected':'')+'>'+esc(k+(nm?' – '+nm:''))+'</option>'; });
+    list.forEach(function(e){ var k=nbk(e.schluessel), sel=k===cur; if(sel)found=true; o+='<option value="'+esc(k)+'"'+(sel?' selected':'')+'>'+esc(k+(e.name?' – '+e.name:''))+'</option>'; });
     if(cur&&!found) o+='<option value="'+esc(cur)+'" selected>'+esc(cur)+' (nicht in B2)</option>';
     return '<select class="cell-edit" data-a1="'+esc(a1)+'" data-sheet="'+esc(sheet)+'" data-srow="'+srow+'" data-scol="'+scol+'">'+o+'</select>';
   }
@@ -433,7 +433,7 @@ var ERP_CFG={
         if(em&&sc!=null){
           var a1="'"+v.src.sheet.replace(/'/g,"''")+"'!"+colLetter(sc)+(srcRow+1);
           var colLbl=String(cols[i]||"");
-          var isBkr=/^\s*(bkr|buchungskreis)\s*$/i.test(colLbl) && (typeof D!=="undefined"&&D&&D.bkr&&Object.keys(D.bkr).length);
+          var isBkr=/^\s*(bkr|buchungskreis)\s*$/i.test(colLbl) && (typeof D!=="undefined"&&D&&D.bkrList&&D.bkrList.length);
           var bps=(code==="G"&&/gegenpartei/i.test(colLbl))?bpNames():null;
           if(isBkr){
             h+='<td class="edit-td">'+bkrSelect(a1,v.src.sheet,srcRow,sc,val)+'</td>';
@@ -841,13 +841,13 @@ var ERP_CFG={
     var begMap={}; tx.forEach(function(x){ if(x.empf&&x.kat&&x.kat!=="Unklar") begMap[x.empf]=x.kat; }); window.__BK_BEGMAP=begMap;
     var begs=Object.keys(begMap).sort(function(a,b){return a.localeCompare(b);});
     var cats=(ACDOCA_CATLIST.length?ACDOCA_CATLIST.slice():ACDOCA_CATS.slice()); ACATS.forEach(function(c){ if(cats.indexOf(c)<0) cats.push(c); }); if(cats.indexOf("Unklar")<0) cats.push("Unklar");
-    var bkMap=(D&&D.bkr)||{}, bkKeys=Object.keys(bkMap).sort(); if(cfg.bkr&&bkKeys.indexOf(cfg.bkr)<0) bkKeys.unshift(cfg.bkr);
+    var bkList=(D&&D.bkrList)||[], bkKeys=bkList.map(function(e){return e.schluessel;}), bkName={}; bkList.forEach(function(e){bkName[e.schluessel]=e.name;}); if(cfg.bkr&&bkKeys.indexOf(cfg.bkr)<0) bkKeys.unshift(cfg.bkr);
     var today=new Date().toISOString().slice(0,10);
     var h='<div class="crumb" data-go="'+cfg.back+'" style="cursor:pointer">‹ '+esc(streamLbl)+'</div><div class="page-head"><h1>'+esc(t.label)+'</h1></div>';
     h+='<div class="panel"><div style="padding:18px"><div class="bform">';
     h+='<div class="two"><div class="row"><label>Datum</label><input type="date" id="bk_datum" value="'+today+'"></div><div class="row"><label>Betrag (€)</label><input id="bk_betrag" inputmode="text" placeholder="-123,45  ·  minus = Ausgabe"></div></div>';
     h+='<div class="row"><label>Begünstiger</label><input id="bk_empf" list="bk_begs" placeholder="z. B. Firma / Person"><datalist id="bk_begs">'+begs.map(function(b){return '<option value="'+esc(b)+'">';}).join('')+'</datalist></div>';
-    h+='<div class="two"><div class="row"><label>Kategorie</label><select id="bk_kat">'+cats.map(function(c){return '<option>'+esc(c)+'</option>';}).join('')+'</select></div><div class="row"><label>Buchungskreis</label><select id="bk_bkr">'+bkKeys.map(function(k){ var nm=bkMap[k]&&bkMap[k].name; return '<option value="'+esc(k)+'"'+(k===cfg.bkr?' selected':'')+'>'+esc(k+(nm?' – '+nm:''))+'</option>'; }).join('')+'</select></div></div>';
+    h+='<div class="two"><div class="row"><label>Kategorie</label><select id="bk_kat">'+cats.map(function(c){return '<option>'+esc(c)+'</option>';}).join('')+'</select></div><div class="row"><label>Buchungskreis</label><select id="bk_bkr">'+bkKeys.map(function(k){ var nm=bkName[k]; return '<option value="'+esc(k)+'"'+(k===cfg.bkr?' selected':'')+'>'+esc(k+(nm?' – '+nm:''))+'</option>'; }).join('')+'</select></div></div>';
     h+='<div class="row"><label>Verwendungszweck <span class="muted" style="font-weight:400">(optional)</span></label><input id="bk_zweck" placeholder="z. B. Rechnung Nr. …"></div>';
     h+='<div style="display:flex;gap:12px;align-items:center;margin-top:6px"><button class="editbtn on" data-buchen="'+esc(code)+'">Beleg buchen</button><span class="muted" style="font-size:12px">→ ACDOCA-Journal · Objekt/Stream = '+esc(streamLbl)+'</span></div>';
     h+='</div></div></div>';
@@ -1352,8 +1352,17 @@ function parseSheets(S){
   var hrB2=-1; for(var rb=0;rb<Math.min(maxRow('B2'),12);rb++){ for(var cb=0;cb<8;cb++){ if(/schl(ü|ue)ssel/i.test(String(cell('B2',rb,cb)||""))){ hrB2=rb; break; } } if(hrB2>=0)break; } if(hrB2<0)hrB2=2;
   e=extract('B2',hrB2); gridview('B2','Buchungskreise',e.cols,e.rows,null,null,{sheet:'B2',srcRows:e.srcRows,headerRow:e.headerRow,edit:"auto"});
   var hrB3=hdrRow('B3',1);
-  var rowsB3=[],srcB3=[]; for(r=hrB3+1;r<maxRow('B3');r++){ var a=cell('B3',r,0); if(!a||String(a).trim()==="Summe")continue; rowsB3.push([a,cell('B3',r,1),cell('B3',r,2),num(cell('B3',r,3))]); srcB3.push(r); }
-  gridview('B3','Immobilienwerte',['Objekt','Ort','Bkr','Wert (€)'],rowsB3,3,[3],{sheet:'B3',srcRows:srcB3,headerRow:hrB3,edit:mapCols(0,4)});
+  // B2-Schlüssel vorab (für datengetriebene Spaltenerkennung in B3)
+  var _b2keys={},_hb2=-1,_cs2=-1; for(var _rr=0;_rr<Math.min(maxRow('B2'),12)&&_hb2<0;_rr++){ for(var _cc=0;_cc<10;_cc++){ if(/schl(ü|ue)ssel/i.test(String(cell('B2',_rr,_cc)||""))){_hb2=_rr;_cs2=_cc;break;} } }
+  if(_hb2>=0)for(var _r2=_hb2+1;_r2<maxRow('B2');_r2++){ var _k2=normkey(cell('B2',_r2,_cs2)); if(_k2)_b2keys[_k2]=1; }
+  // B3-Datenzeilen (alle Spalten), dann Bkr-/Wert-Spalte datengetrieben bestimmen (B3 kann >4 Spalten haben)
+  var _b3=[]; for(r=hrB3+1;r<maxRow('B3');r++){ var any=false,rc=[]; for(c=0;c<14;c++){ var cv=cell('B3',r,c); rc.push(cv); if(cv!=null)any=true; } if(any&&String(rc[0]||"").trim()!=="Summe")_b3.push({r:r,c:rc}); }
+  var cBkr=2,bestH=-1; for(c=0;c<14;c++){ var hit=0; _b3.forEach(function(x){ if(_b2keys[normkey(x.c[c])])hit++; }); if(hit>bestH){bestH=hit;cBkr=c;} } if(bestH<=0)cBkr=2;
+  var cWert=3,bestW=-1; for(c=0;c<14;c++){ if(c===cBkr)continue; var sw=0,nw=0; _b3.forEach(function(x){ var vv=num(x.c[c]); if(vv>=1000){sw+=vv;nw++;} }); if(nw>0&&sw>bestW){bestW=sw;cWert=c;} }
+  function _b3h(re,fb){ for(var cc=0;cc<14;cc++){ if(re.test(String(cell('B3',hrB3,cc)||"")))return cc; } return fb; }
+  var cObj=_b3h(/objekt|immobilie/i,0), cOrt=_b3h(/ort|adresse|stadt|lage/i,1);
+  var rowsB3=[],srcB3=[]; _b3.forEach(function(x){ var a=x.c[cObj]; if(a==null||a==="")return; rowsB3.push([a,x.c[cOrt],x.c[cBkr],num(x.c[cWert])]); srcB3.push(x.r); });
+  gridview('B3','Immobilienwerte',['Objekt','Ort','Bkr','Wert (€)'],rowsB3,3,[3],{sheet:'B3',srcRows:srcB3,headerRow:hrB3,edit:[{c:0,sc:cObj},{c:1,sc:cOrt},{c:2,sc:cBkr},{c:3,sc:cWert}]});
   var rowsF=[],srcF=[]; for(r=1;r<maxRow('F');r++){ var bank=cell('F',r,1); if(!bank||String(bank).trim()==="Summe")continue; rowsF.push([cell('F',r,0),bank,cell('F',r,2),num(cell('F',r,3)),cell('F',r,4),num(cell('F',r,3))]); srcF.push(r); }
   gridview('F','Global Cash – Bankkonten',['ID','Bank','Konto','Kontostand (€)','Bkr','Wert (€)'],rowsF,5,[3,5],{sheet:'F',srcRows:srcF,headerRow:0,edit:[{c:0,sc:0},{c:1,sc:1},{c:2,sc:2},{c:3,sc:3},{c:4,sc:4}]});
   var rowsG=[],srcG=[]; for(r=1;r<maxRow('G');r++){ var art=cell('G',r,1); if(!art||String(art).trim()==="Summe")continue; var betrag=num(cell('G',r,4))||0; var saldo=(String(art).indexOf("Verbindlich")===0)?-betrag:betrag; rowsG.push([cell('G',r,0),art,cell('G',r,2),cell('G',r,3),betrag,cell('G',r,5),cell('G',r,6),cell('G',r,7),saldo]); srcG.push(r); }
@@ -1410,7 +1419,8 @@ function parseSheets(S){
   var kpis={networth:Math.round(cash+liquid+realestate+sonstige+arap),cash:Math.round(cash),liquid:Math.round(liquid),realestate:Math.round(realestate),sonstige:Math.round(sonstige),arap:Math.round(arap),wp:Math.round(wpS),kr:Math.round(krS),em:Math.round(emS)};
   // bkr drilldown
   var bkr={}, ciS2=-1,ciN2=-1; for(var cb2=0;cb2<10;cb2++){ var hs2=String(cell('B2',hrB2,cb2)||""); if(/schl(ü|ue)ssel/i.test(hs2))ciS2=cb2; else if(/^\s*name/i.test(hs2))ciN2=cb2; } if(ciS2<0)ciS2=1; if(ciN2<0)ciN2=2;
-  for(r=hrB2+1;r<maxRow('B2');r++){ var sch=cell('B2',r,ciS2),k=normkey(sch); if(k)bkr[k]={schluessel:k,name:cell('B2',r,ciN2)||"",items:[],sum:0}; }
+  var bkrDefs=[];
+  for(r=hrB2+1;r<maxRow('B2');r++){ var sch=cell('B2',r,ciS2),k=normkey(sch); if(k){ bkr[k]={schluessel:k,name:cell('B2',r,ciN2)||"",items:[],sum:0}; bkrDefs.push({schluessel:k,name:cell('B2',r,ciN2)||""}); } }
   function addItem(key,kind,name,wert){ var k=normkey(key); if(k==null)return; if(!bkr[k])bkr[k]={schluessel:k,name:"",items:[],sum:0}; var w=num(wert)||0; bkr[k].items.push({kind:kind,name:name,wert:round2(w)}); bkr[k].sum=round2(bkr[k].sum+w); }
   rowsF.forEach(function(x){ addItem(x[4],"Bankkonto",((x[1]||"")+" · "+(x[2]||"")).replace(/^ · | · $/,""),x[3]); });
   rowsB3.forEach(function(x){ addItem(x[2],"Immobilie",x[0],x[3]); });
@@ -1458,7 +1468,7 @@ function parseSheets(S){
       if(kat) acatsCount[kat]=1;
     }
   })();
-  return {nav:nav,views:views,kpis:kpis,bkr:bkr,acdoca:acdoca,acats:Object.keys(acatsCount),cats:cats,brand:brand};
+  return {nav:nav,views:views,kpis:kpis,bkr:bkr,bkrList:bkrDefs,acdoca:acdoca,acats:Object.keys(acatsCount),cats:cats,brand:brand};
 }
 </script>
 <script>

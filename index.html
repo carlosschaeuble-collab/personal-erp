@@ -399,6 +399,15 @@ var ERP_CFG={
     if(cur&&!found) o+='<option value="'+esc(cur)+'" selected>'+esc(cur)+' (nicht hinterlegt)</option>';
     return '<select class="cell-edit" data-a1="'+esc(a1)+'" data-sheet="'+esc(sheet)+'" data-srow="'+srow+'" data-scol="'+scol+'">'+o+'</select>';
   }
+  // Buchungskreise aus Reiter B2 (Dropdown „Schlüssel – Name", schreibt den Schlüssel)
+  function bkrSelect(a1,sheet,srow,scol,val){
+    function nbk(x){ if(x==null||x==="")return ""; var n=parseFloat(x); return isNaN(n)?String(x).trim():String(Math.round(n)); }
+    var map=(typeof D!=="undefined"&&D&&D.bkr)||{}, keys=Object.keys(map).sort(), cur=nbk(val), found=false;
+    var o='<option value=""'+(cur===""?' selected':'')+'>—</option>';
+    keys.forEach(function(k){ var sel=k===cur; if(sel)found=true; var nm=map[k]&&map[k].name; o+='<option value="'+esc(k)+'"'+(sel?' selected':'')+'>'+esc(k+(nm?' – '+nm:''))+'</option>'; });
+    if(cur&&!found) o+='<option value="'+esc(cur)+'" selected>'+esc(cur)+' (nicht in B2)</option>';
+    return '<select class="cell-edit" data-a1="'+esc(a1)+'" data-sheet="'+esc(sheet)+'" data-srow="'+srow+'" data-scol="'+scol+'">'+o+'</select>';
+  }
   function gridHTML(v, code){
     var cols=v.cols, money=v.money_idx||[];
     var em=!!(editState[code]&&v.src);
@@ -423,8 +432,12 @@ var ERP_CFG={
         var val=row[i], isM=money.indexOf(i)>=0, sc=em?editColOf(v,i):null;
         if(em&&sc!=null){
           var a1="'"+v.src.sheet.replace(/'/g,"''")+"'!"+colLetter(sc)+(srcRow+1);
-          var bps=(code==="G"&&/gegenpartei/i.test(String(cols[i]||"")))?bpNames():null;
-          if(bps&&bps.length){
+          var colLbl=String(cols[i]||"");
+          var isBkr=/^\s*(bkr|buchungskreis)\s*$/i.test(colLbl) && (typeof D!=="undefined"&&D&&D.bkr&&Object.keys(D.bkr).length);
+          var bps=(code==="G"&&/gegenpartei/i.test(colLbl))?bpNames():null;
+          if(isBkr){
+            h+='<td class="edit-td">'+bkrSelect(a1,v.src.sheet,srcRow,sc,val)+'</td>';
+          } else if(bps&&bps.length){
             h+='<td class="edit-td">'+bpSelect(a1,v.src.sheet,srcRow,sc,val,bps)+'</td>';
           } else {
             h+='<td class="edit-td"><input class="cell-edit" data-a1="'+esc(a1)+'" data-sheet="'+esc(v.src.sheet)+'" data-srow="'+srcRow+'" data-scol="'+sc+'" value="'+esc(val==null?"":val)+'"></td>';
@@ -1338,8 +1351,9 @@ function parseSheets(S){
   e=extract('B1',hdrRow('B1',2)); gridview('B1','Business Partner',e.cols,e.rows,null,null,{sheet:'B1',srcRows:e.srcRows,headerRow:e.headerRow,edit:"auto"});
   var hrB2=-1; for(var rb=0;rb<Math.min(maxRow('B2'),12);rb++){ for(var cb=0;cb<8;cb++){ if(/schl(ü|ue)ssel/i.test(String(cell('B2',rb,cb)||""))){ hrB2=rb; break; } } if(hrB2>=0)break; } if(hrB2<0)hrB2=2;
   e=extract('B2',hrB2); gridview('B2','Buchungskreise',e.cols,e.rows,null,null,{sheet:'B2',srcRows:e.srcRows,headerRow:e.headerRow,edit:"auto"});
-  var rowsB3=[],srcB3=[]; for(r=2;r<maxRow('B3');r++){ var a=cell('B3',r,0); if(!a)continue; rowsB3.push([a,cell('B3',r,1),cell('B3',r,2),num(cell('B3',r,3))]); srcB3.push(r); }
-  gridview('B3','Immobilienwerte',['Objekt','Ort','Bkr','Wert (€)'],rowsB3,3,[3],{sheet:'B3',srcRows:srcB3,headerRow:1,edit:mapCols(0,4)});
+  var hrB3=hdrRow('B3',1);
+  var rowsB3=[],srcB3=[]; for(r=hrB3+1;r<maxRow('B3');r++){ var a=cell('B3',r,0); if(!a||String(a).trim()==="Summe")continue; rowsB3.push([a,cell('B3',r,1),cell('B3',r,2),num(cell('B3',r,3))]); srcB3.push(r); }
+  gridview('B3','Immobilienwerte',['Objekt','Ort','Bkr','Wert (€)'],rowsB3,3,[3],{sheet:'B3',srcRows:srcB3,headerRow:hrB3,edit:mapCols(0,4)});
   var rowsF=[],srcF=[]; for(r=1;r<maxRow('F');r++){ var bank=cell('F',r,1); if(!bank||String(bank).trim()==="Summe")continue; rowsF.push([cell('F',r,0),bank,cell('F',r,2),num(cell('F',r,3)),cell('F',r,4),num(cell('F',r,3))]); srcF.push(r); }
   gridview('F','Global Cash – Bankkonten',['ID','Bank','Konto','Kontostand (€)','Bkr','Wert (€)'],rowsF,5,[3,5],{sheet:'F',srcRows:srcF,headerRow:0,edit:[{c:0,sc:0},{c:1,sc:1},{c:2,sc:2},{c:3,sc:3},{c:4,sc:4}]});
   var rowsG=[],srcG=[]; for(r=1;r<maxRow('G');r++){ var art=cell('G',r,1); if(!art||String(art).trim()==="Summe")continue; var betrag=num(cell('G',r,4))||0; var saldo=(String(art).indexOf("Verbindlich")===0)?-betrag:betrag; rowsG.push([cell('G',r,0),art,cell('G',r,2),cell('G',r,3),betrag,cell('G',r,5),cell('G',r,6),cell('G',r,7),saldo]); srcG.push(r); }
@@ -1380,7 +1394,8 @@ function parseSheets(S){
   var eC1=extract('C1',hrC1), moneyC1=[], typC1=-1; eC1.cols.forEach(function(c,i){ var s=String(c||""); if(/Pro Periode|Pro Jahr|€|Betrag/i.test(s))moneyC1.push(i); if(/^Typ/i.test(s))typC1=i; });
   gridview('C1',labelOf('C1'),eC1.cols,eC1.rows,null,moneyC1,{sheet:'C1',srcRows:eC1.srcRows,headerRow:eC1.headerRow,edit:"auto"});
   if(typC1>=0) views['C1'].toggle={col:typC1,options:["fix","variabel"]};
-  e=extract('D1',3,4); gridview('D1',labelOf('D1'),e.cols,e.rows);
+  var hrD1=-1; for(r=0;r<Math.min(maxRow('D1'),14);r++){ if(/^\s*art\s*$/i.test(String(cell('D1',r,0)||""))){hrD1=r;break;} } if(hrD1<0)hrD1=3;
+  e=extract('D1',hrD1,4); gridview('D1',labelOf('D1'),e.cols,e.rows);
   e=extract('H1.2',3,9); gridview('H1.2','Marbella – Kosten / Reparaturen',e.cols,e.rows);
   ['H2.2','H3.2'].forEach(function(cd){ var ee=extract(cd,2); gridview(cd,labelOf(cd),ee.cols,ee.rows,null,null,{sheet:cd,srcRows:ee.srcRows,headerRow:ee.headerRow,edit:"auto"}); });
   ['H2.4','H3.4'].forEach(function(cd){ var ee=extract(cd,2); gridview(cd,labelOf(cd),ee.cols,ee.rows,null,null,{sheet:cd,srcRows:ee.srcRows,headerRow:ee.headerRow,edit:"auto"}); });

@@ -305,10 +305,9 @@ table.alv input.cell-edit:disabled,table.alv select.cell-edit:disabled{opacity:.
       <b id="brandName">Don Carlos</b><span>Personal ERP</span>
     </div>
     <label class="search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input placeholder="Suchen…" aria-label="Suchen"></label>
-    <div class="sphereseg" id="sphereSeg" title="Privat / Business trennen">
-      <button data-sph="privat">Privat</button>
+    <div class="sphereseg" id="sphereSeg" title="Welt wählen: Privat / Business">
+      <button data-sph="privat" class="on">Privat</button>
       <button data-sph="business">Business</button>
-      <button data-sph="gesamt" class="on">Gesamt</button>
     </div>
     <button class="livechip" id="refreshBtn" title="Daten neu laden"><span class="d"></span>Live</button>
     <span class="avatar" id="avatar">CS</span>
@@ -346,7 +345,7 @@ var ERP_CFG={
       if(sphereHidesTab(t.code))return;
       var tab=document.createElement("div"); tab.className="tab"; tab.dataset.code=t.code;
       var kids=t.children||[];
-      tab.innerHTML='<div class="lbl" data-go="'+t.code+'">'+esc(SHORT[t.code]||t.label)+'</div>';
+      tab.innerHTML='<div class="lbl" data-go="'+t.code+'">'+esc(t.label||SHORT[t.code]||t.code)+'</div>';
       if(kids.length){
         var fly=document.createElement("div"); fly.className="flyout"; var html="",lastG=null;
         kids.forEach(function(ch){
@@ -361,14 +360,16 @@ var ERP_CFG={
   tabsEl.addEventListener("click",function(e){ var g=e.target.closest("[data-go]"); if(g) go(g.dataset.go); });
   (function(){ var seg=document.getElementById('sphereSeg'); if(seg)seg.addEventListener('click',function(e){ var b=e.target.closest('[data-sph]'); if(b)setSphere(b.dataset.sph); }); })();
   var cur=null, curObj=null, sortState={}, editState={}, AC=[], ACATS=[], ACDOCA_CATLIST=[], ACDOCA_USERRULES=[], acFilter={month:"",kat:""}, mkFilter={};
-  var sphere=(function(){ try{ var s=localStorage.getItem('erp_sphere'); return (s==='privat'||s==='business')?s:'gesamt'; }catch(e){ return 'gesamt'; } })();
+  var sphere=(function(){ try{ var s=localStorage.getItem('erp_sphere'); return s==='business'?'business':'privat'; }catch(e){ return 'privat'; } })();
+  var navPrivate=[], navBusiness=[];
+  function activeNav(){ return sphere==='business'?navBusiness:navPrivate; }
   function nkS(x){ if(x==null||x==="")return ""; var n=parseFloat(x); return isNaN(n)?String(x).trim():String(Math.round(n)); }
   function sphereOf(key){ var k=nkS(key); if(!k)return ''; var m=(typeof D!=="undefined"&&D&&D.sphere)||{}; if(m[k])return m[k]; var d=k.charAt(0); return d==='1'?'privat':(d==='2'?'business':''); }
   function inSphere(bkr){ return sphere==='gesamt' || sphereOf(bkr)===sphere; }
   function kpi(){ return (K&&K[sphere])||(K&&K.gesamt)||K||{}; }
-  function sphereHidesTab(code){ var top=String(code||"").charAt(0); if(sphere==='privat')return top==='H'; if(sphere==='business')return top==='C'||top==='D'||top==='E'; return false; }
-  function updateSphereUI(){ var seg=document.getElementById('sphereSeg'); if(seg)Array.prototype.forEach.call(seg.querySelectorAll('[data-sph]'),function(b){ b.classList.toggle('on', b.dataset.sph===sphere); }); var sb=document.getElementById('sbSphere'); if(sb)sb.textContent='Sphäre: '+(sphere==='gesamt'?'Gesamt (Privat + Business)':(sphere==='privat'?'Privat':'Business')); }
-  function setSphere(s){ if(s!==sphere){ sphere=s; try{localStorage.setItem('erp_sphere',s);}catch(e){} } buildTabs(); updateSphereUI(); if(cur&&sphereHidesTab(cur)){ go('A'); } else { render(); setActive(cur||'A'); } }
+  function sphereHidesTab(code){ return false; }
+  function updateSphereUI(){ var seg=document.getElementById('sphereSeg'); if(seg)Array.prototype.forEach.call(seg.querySelectorAll('[data-sph]'),function(b){ b.classList.toggle('on', b.dataset.sph===sphere); }); var sb=document.getElementById('sbSphere'); if(sb)sb.textContent='Welt: '+(sphere==='business'?'Business':'Privat'); }
+  function setSphere(s){ s=(s==='business')?'business':'privat'; if(s!==sphere){ sphere=s; try{localStorage.setItem('erp_sphere',s);}catch(e){} } nav=activeNav(); byCode={}; nav.forEach(function(t){byCode[t.code]=t;(t.children||[]).forEach(function(ch){byCode[ch.code]=ch;});}); buildTabs(); updateSphereUI(); go('A'); }
   var BUCHCFG={
     CBUCH:{stream:"Detmold",back:"C",after:"C1",konto:"Hauptbuch Detmold",bkr:"1020"},
     H1BUCH:{stream:"Marbella",back:"H",after:"H1.2",konto:"Hauptbuch Marbella",bkr:"2010"},
@@ -418,7 +419,7 @@ var ERP_CFG={
   function go(code){ cur=code; curObj=null; acFilter={month:"",kat:""}; mkFilter={}; render(); window.scrollTo(0,0); setActive(code); }
   function goObj(code,oi){ cur=code; curObj={code:code,oi:oi}; acFilter={month:"",kat:""}; render(); window.scrollTo(0,0); setActive(code); }
   function head(title,crumb){ return (crumb?'<div class="crumb">'+esc(crumb)+'</div>':'')+'<div class="page-head"><h1>'+esc(title)+'</h1></div>'; }
-  var OBJECTABLE={"H2.1":1,"H3.1":1,"B1":1,"F":1,"G":1,"B2":1,"C1":1};
+  var OBJECTABLE={}; /* Zeilen-Detailseiten im Zwei-Welten-Grundgerüst vorerst aus (kommen später, dann je Tabellenname) */
   function editColOf(v,i){ if(!v.src||!v.src.edit)return null; if(v.src.edit==="auto"){ return /^ID/i.test(v.cols[i])?null:i; } for(var j=0;j<v.src.edit.length;j++){ if(v.src.edit[j].c===i)return v.src.edit[j].sc; } return null; }
   function colLetter(n){ var s=""; n=n+1; while(n>0){ var rr=(n-1)%26; s=String.fromCharCode(65+rr)+s; n=Math.floor((n-1)/26);} return s; }
   // Business-Partner-Namen aus Reiter B1 (für Dropdowns, z. B. Gegenpartei in G)
@@ -497,18 +498,35 @@ var ERP_CFG={
     h+='</table></div></div>'; return h;
   }
   function toolbar(){ return '<button class="tbtn" title="Aktualisieren"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"/></svg></button><button class="tbtn" title="Filtern"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4-2v-4z"/></svg></button><button class="tbtn" title="Export"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 11l4 4 4-4M5 21h14"/></svg></button>'; }
+  function moneyNum(x){ if(x==null||x==="")return null; if(typeof x==="number")return x; var s=String(x).replace(/[^\d,.\-]/g,""); if(!s||s==="-")return null; if(/,/.test(s)&&/\./.test(s)){ s=s.replace(/\./g,"").replace(",","."); } else if(/,/.test(s)){ s=s.replace(",","."); } var n=parseFloat(s); return isNaN(n)?null:n; }
+  function worldOfKey(key){ var m=(typeof D!=="undefined"&&D&&D.comp)||{}; var k=(key==null||key==="")?"":(isNaN(parseFloat(key))?String(key).trim():String(Math.round(parseFloat(key)))); return (k&&m[k])?m[k].art:(String(k).charAt(0)==='2'?'business':'privat'); }
+  function ovSum(tableName, colRe, bkrRe){
+    var v=V[tableName]; if(!v||!v.rows)return {sum:0,n:0};
+    var cols=v.cols||[]; function ci(re){ for(var i=0;i<cols.length;i++){ if(re.test(String(cols[i]||"")))return i; } return -1; }
+    var ic=ci(colRe); if(ic<0)return {sum:0,n:0}; var ib=bkrRe?ci(bkrRe):-1, sum=0,n=0;
+    v.rows.forEach(function(r){ if(ib>=0 && worldOfKey(r[ib])!==sphere) return; var val=moneyNum(r[ic]); if(val!=null){ sum+=val; n++; } });
+    return {sum:sum,n:n};
+  }
   function overviewHTML(){
-    var kv=kpi();
-    var h=head("Übersicht","Overview / Startseite"+(sphere!=='gesamt'?' · '+(sphere==='privat'?'Privat':'Business'):''));
+    var world=sphere==='business'?'Business':'Privat', BKR=/bkr|buchungskreis|company/i;
+    var cash=ovSum('BACC',/kontostand|saldo|betrag|€/i,BKR).sum;
+    var re=ovSum('IMMO',/^wert|marktwert/i,BKR).sum;
+    var asset=ovSum('ASSET',/wert/i,BKR).sum;
+    var open=ovSum(sphere==='business'?'ARAP-B':'ARAP-P',/saldo/i,BKR).sum;
+    var nw=cash+re+asset+open;
+    var h=head("Overview · "+world,"Startseite / Cockpit");
     h+='<section class="tiles">';
-    h+=tile("Net Worth",eur(kv.networth),"Vermögen abzgl. Schulden","big");
-    h+=tile("Cash",eur(kv.cash),"Bankkonten + Verrechnung");
-    h+=tile("Liquid Assets",eur(kv.liquid),"Wertpapiere · Krypto · Edelmetalle");
-    h+=tile("Real Estate",eur(kv.realestate),"Immobilienwerte");
+    h+=tile("Net Worth",eur(nw),"Vermögen abzgl. offene Posten","big");
+    h+=tile("Bankguthaben",eur(cash),"Konten (BACC)");
+    h+=tile("Immobilien",eur(re),"Objekte (IMMO)");
+    h+=tile("Wertpapiere & Co.",eur(asset),"Vermögen (ASSET)");
     h+='</section>';
-    h+='<div class="ov-cols">'+compDonutHTML()+bkrBreakHTML()+'</div>';
-    h+='<div class="ov-cols">'+arapOverviewHTML()+kontenOverviewHTML()+'</div>';
-    h+='<div class="panel"><div style="padding:11px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap"><div style="flex:1;min-width:220px"><div style="font-weight:500;font-size:13px">🎨 Google-Sheet formatieren</div><div class="muted" style="font-size:12px">Kopfzeilen fixieren, Spaltenbreiten, Buchungskreis-Dropdowns ins Sheet.</div></div><button class="editbtn" data-fmt="1">✨ Formatieren</button></div></div>';
+    var codes=((D&&D.compList)||[]).filter(function(c){return c.art===sphere;});
+    h+='<div class="panel"><div class="alv-bar"><h2>Buchungskreise · '+esc(world)+'</h2><span class="sp"></span><span class="count">'+codes.length+'</span></div><div style="padding:10px 16px 16px">';
+    if(!codes.length) h+='<div class="empty">Keine Buchungskreise für diese Welt in COMP hinterlegt.</div>';
+    codes.forEach(function(c){ h+='<div class="bar-row"><div class="bl" title="'+esc(c.name)+'">'+esc(c.schluessel)+' · '+esc(c.name)+'</div><div class="bt"></div><div class="bv muted" style="font-size:12px;font-weight:400">'+esc(c.besch||'')+'</div></div>'; });
+    h+='</div></div>';
+    h+='<div class="note-card"><span class="vp">Grundgerüst</span><p>Zwei-Welten-Modell steht: der Umschalter oben wählt <b>'+esc(world)+'</b> (Structure-'+(sphere==='business'?'Business':'Private')+' + ACDOCA-'+(sphere==='business'?'B':'P')+'). Jede Seite zieht ihre Daten aus der hinterlegten Tabelle (Spalte Tabellenname). Spezial-Auswertungen (GuV, Abrechnungen, AR/AP-Kacheln, Immobilien) bauen wir als Nächstes aus.</p></div>';
     return h;
   }
   function tile(k,v,d,big){ return '<div class="tile'+(big?' big':'')+'"><p class="k">'+esc(k)+'</p><div class="v">'+v+'</div>'+(d?'<div class="d'+(/-/.test(v)?' neg':'')+'">'+esc(d)+'</div>':'')+'</div>'; }
@@ -996,7 +1014,7 @@ var ERP_CFG={
   }
   function groupHTML(code){
     var t=byCode[code];
-    var h=head(SHORT[code]||t.label, t.desc||"");
+    var h=head(t.label||code, t.desc||"");
     h+='<div class="gcards">';
     (t.children||[]).forEach(function(ch){ h+='<div class="gcard" data-go="'+ch.code+'"><span class="code">'+ch.code+'</span><h3>'+esc(shortChild(ch))+'</h3><p>'+esc(ch.desc||"")+'</p></div>'; });
     h+='</div>'; return h;
@@ -1323,28 +1341,10 @@ var ERP_CFG={
     var p=document.getElementById("page"), code=cur;
     if(curObj){ p.innerHTML=objectHTML(curObj.code,curObj.oi); return; }
     if(code==="A"){ p.innerHTML=overviewHTML(); return; }
-    if(code==="C"){ p.innerHTML=cOverviewHTML(); return; }
-    if(code==="C1"){ p.innerHTML=detmoldHTML(); return; }
-    if(/BUCH$/.test(code)){ p.innerHTML=buchenHTML(code); return; }
-    if(code==="H"){ p.innerHTML=businessHTML(); return; }
-    if(code==="H1.2"){ p.innerHTML=marbellaKostenHTML(); return; }
-    if(code==="E"||/^E[1-5]$/.test(code)){
-      if(code==="E1"){ p.innerHTML=noteHTML("E1"); return; }
-      p.innerHTML=calcHTML();
-      ["mc_kp","mc_nk","mc_ek","mc_z","mc_t","mc_hg","mc_ih","mc_ws","mc_m","mc_mnk","mc_ms","mc_jahre"].forEach(function(id){ var e=document.getElementById(id); if(e)e.addEventListener("input",computeMUC); });
-      computeMUC(); return;
-    }
-    var v=V[code];
-    if(v){
-      if(v.kind==="grid"){ if(code==="B1"&&!editState["B1"]) p.innerHTML=partnersHTML(v,code); else if(code==="B2"&&!editState["B2"]) p.innerHTML=buchungskreiseHTML(v); else if(code==="F"&&!editState["F"]) p.innerHTML=cashHTML(v,code); else if(code==="G"&&!editState["G"]) p.innerHTML=arapHTML(v,code); else if(code==="H1.1"&&v.costagolf&&!editState["H1.1"]) p.innerHTML=costaGolfHTML(v); else p.innerHTML=gridHTML(v,code); }
-      else if(v.kind==="invest") p.innerHTML=investHTML(v);
-      else if(v.kind==="guv") p.innerHTML=guvHTML(v);
-      else if(v.kind==="keyvalue") p.innerHTML=keyvalueHTML(v);
-      else if(v.kind==="pnl") p.innerHTML=pnlHTML(v);
-      else p.innerHTML=noteHTML(code);
-      return;
-    }
-    if(byCode[code]&&byCode[code].children){ p.innerHTML=groupHTML(code); return; }
+    var node=byCode[code]||{};
+    if(node.children&&node.children.length){ p.innerHTML=groupHTML(code); return; }
+    var tn=node.table, v=tn?V[tn]:null;
+    if(v&&v.kind==="grid"){ v.title=node.label||tn; p.innerHTML=gridHTML(v,code); return; }
     p.innerHTML=noteHTML(code);
   }
   document.getElementById("page").addEventListener("click",function(e){
@@ -1391,7 +1391,7 @@ var ERP_CFG={
       .catch(function(e){ __acctIdDone=false; toast("✗ ID-Vergabe fehlgeschlagen: "+(e.message||e),true); });
   }
   function boot(data, keepTab){
-    D=data; nav=D.nav; V=D.views; K=D.kpis; AC=D.acdoca||[]; ACATS=D.acats||[];
+    D=data; navPrivate=D.navPrivate||[]; navBusiness=D.navBusiness||[]; nav=activeNav(); V=D.views; K=D.kpis; AC=D.acdoca||[]; ACATS=D.acats||[];
     if(D.brand){ var bn=document.getElementById('brandName'); if(bn)bn.textContent=D.brand; try{document.title=D.brand+" · Personal ERP";}catch(e){} }
     ACDOCA_CATLIST=(D.cats||[]).map(function(c){return c.kat;}).filter(Boolean);
     ACDOCA_USERRULES=(D.cats||[]).map(function(c){ var kw=(c.keywords||[]).map(function(k){return k.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");}); return kw.length?[new RegExp(kw.join("|"),"i"),c.kat]:null; }).filter(Boolean);
@@ -1579,7 +1579,59 @@ function parseSheets(S){
       if(kat) acatsCount[kat]=1;
     }
   })();
-  return {nav:nav,views:views,kpis:kpis,bkr:bkr,bkrList:bkrDefs,acdoca:acdoca,acats:Object.keys(acatsCount),cats:cats,brand:brand,sphere:_sphMap};
+  // ===== NEU: Zwei-Welten-Modell (Structure-Private / Structure-Business) =====
+  // COMP = Company Codes (Buchungskreise) mit Spalte Art = Private/Business
+  var comp={}, compList=[];
+  (function(){
+    var A=S['COMP']||[]; if(!A.length)return;
+    var hr=-1; for(var r0=0;r0<Math.min(A.length,12);r0++){ if(/schl(ü|ue)ssel/i.test(String((A[r0]||[])[0]||""))){hr=r0;break;} } if(hr<0)return;
+    var H=(A[hr]||[]).map(function(x){return String(x==null?"":x);});
+    function ci(re){ for(var i=0;i<H.length;i++){ if(re.test(H[i]))return i; } return -1; }
+    var iK=ci(/schl(ü|ue)ssel/i), iN=ci(/^name/i), iB=ci(/beschreib/i), iA=ci(/^art/i), iW=ci(/w(ä|ae)hrung/i), iL=ci(/land/i); if(iK<0)iK=0;
+    for(var r2=hr+1;r2<A.length;r2++){ var row=A[r2]||[]; var k=normkey(row[iK]); if(!k)continue;
+      var art=String((iA>=0?row[iA]:"")||"").toLowerCase(); var sph=/bus|gesch/.test(art)?'business':(/priv/.test(art)?'privat':(String(k).charAt(0)==='2'?'business':'privat'));
+      comp[k]={schluessel:k,name:iN>=0?String(row[iN]||""):"",besch:iB>=0?String(row[iB]||""):"",art:sph,waehrung:iW>=0?String(row[iW]||""):"",land:iL>=0?String(row[iL]||""):""};
+      compList.push(comp[k]);
+    }
+  })();
+  // Tabellenname-Resolver: echte Tabelle direkt; ACDOCA/ARAP bekommen Welt-Suffix; Platzhalter über die Seite; sonst leer
+  function tabExists(t){ return !!(t && S[t] && S[t].length); }
+  function resolveTable(raw, seite, world){
+    var t=String(raw==null?"":raw).trim();
+    if(/^ACDOCA$/i.test(t)) return world==='business'?'ACDOCA-B':'ACDOCA-P';
+    if(/^ARAP$/i.test(t))   return world==='business'?'ARAP-B':'ARAP-P';
+    if(tabExists(t)) return t;                 // echte, existierende Hintergrundtabelle
+    var s=String(seite==null?"":seite).toLowerCase();   // sonst Platzhalter über die Seite auflösen
+    if(/bank account/.test(s) && tabExists('BACC')) return 'BACC';
+    if(/open item/.test(s))    return world==='business'?'ARAP-B':'ARAP-P';
+    return ''; // BP - IMMO, DOC, Ventures, leer → noch nicht verknüpft
+  }
+  function parseStructure(sheetName, world){
+    var A=S[sheetName]||[], brand="";
+    for(var r0=0;r0<Math.min(A.length,6);r0++){ if(String((A[r0]||[])[0]||"").trim().toLowerCase()==="anzeigename"){ var bv=(A[r0]||[])[1]; if(bv!=null&&String(bv).trim())brand=String(bv).trim(); } }
+    var hr=-1; for(var r1=0;r1<Math.min(A.length,12);r1++){ if(/^id$/i.test(String((A[r1]||[])[0]||"").trim())){hr=r1;break;} } if(hr<0)hr=5;
+    var nodes=[], idx={};
+    for(var r2=hr+1;r2<A.length;r2++){ var row=A[r2]||[]; var id=String(row[0]==null?"":row[0]).trim(); if(!id)continue;
+      var seite=String(row[1]||""), anz=String(row[2]||"").trim()||seite, besch=String(row[3]||""), tname=resolveTable(row[5], seite, world);
+      var node={code:id, label:anz||seite||id, seite:seite, desc:besch, table:tname, world:world};
+      var m3=id.match(/^([A-Za-z])(\d+)\.(\d+)$/), m2=id.match(/^([A-Za-z])(\d+)$/);
+      if(id.length===1){ node.children=[]; nodes.push(node); idx[id]=node; }
+      else if(m3){ if(idx[m3[1]]){ node.group=seite; idx[m3[1]].children.push(node); } }
+      else if(m2){ if(idx[m2[1]]){ idx[m2[1]].children.push(node); } }
+    }
+    return {brand:brand, nav:nodes};
+  }
+  var SP=parseStructure('Structure-Private','privat'), SB=parseStructure('Structure-Business','business');
+  var brand2 = SP.brand || SB.brand || brand;
+  // Generische Views für jede referenzierte Tabelle (einmal je Tabellenname)
+  (function(){
+    var tabs={}; [SP.nav,SB.nav].forEach(function(nv){ nv.forEach(function(t){ if(t.table)tabs[t.table]=1; (t.children||[]).forEach(function(c){ if(c.table)tabs[c.table]=1; }); }); });
+    Object.keys(tabs).forEach(function(tn){ if(views[tn])return; if(!(S[tn]&&S[tn].length))return;
+      var hr=hdrRow(tn,0), e=extract(tn,hr);
+      gridview(tn, tn, e.cols, e.rows, null, null, {sheet:tn, srcRows:e.srcRows, headerRow:e.headerRow, edit:"auto"});
+    });
+  })();
+  return {nav:nav,navPrivate:SP.nav,navBusiness:SB.nav,comp:comp,compList:compList,views:views,kpis:kpis,bkr:bkr,bkrList:bkrDefs,acdoca:acdoca,acats:Object.keys(acatsCount),cats:cats,brand:brand2,sphere:_sphMap};
 }
 </script>
 <script>

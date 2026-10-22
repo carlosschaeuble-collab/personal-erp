@@ -1628,7 +1628,9 @@ function parseSheets(S){
     var tabs={}; [SP.nav,SB.nav].forEach(function(nv){ nv.forEach(function(t){ if(t.table)tabs[t.table]=1; (t.children||[]).forEach(function(c){ if(c.table)tabs[c.table]=1; }); }); });
     Object.keys(tabs).forEach(function(tn){ if(views[tn])return; if(!(S[tn]&&S[tn].length))return;
       var hr=hdrRow(tn,0), e=extract(tn,hr);
-      gridview(tn, tn, e.cols, e.rows, null, null, {sheet:tn, srcRows:e.srcRows, headerRow:e.headerRow, edit:"auto"});
+      var money=[]; e.cols.forEach(function(c,i){ if(/€|\bwert\b/i.test(String(c||"")))money.push(i); });
+      var sumi=money.length?money[money.length-1]:null;
+      gridview(tn, tn, e.cols, e.rows, sumi, money, {sheet:tn, srcRows:e.srcRows, headerRow:e.headerRow, edit:"auto"});
     });
   })();
   return {nav:nav,navPrivate:SP.nav,navBusiness:SB.nav,comp:comp,compList:compList,views:views,kpis:kpis,bkr:bkr,bkrList:bkrDefs,acdoca:acdoca,acats:Object.keys(acatsCount),cats:cats,brand:brand2,sphere:_sphMap};

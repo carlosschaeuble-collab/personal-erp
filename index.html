@@ -1628,9 +1628,11 @@ function parseSheets(S){
   (function(){
     var tabs={}; [SP.nav,SB.nav].forEach(function(nv){ nv.forEach(function(t){ if(t.table)tabs[t.table]=1; (t.children||[]).forEach(function(c){ if(c.table)tabs[c.table]=1; }); }); });
     var SHARED={BP:1,COMP:1,CAT:1,COA:1}; // geteilte Stammdaten → nicht nach Welt filtern
+    // Geld-Spalten erkennen: „€" im Header ODER bekannter Geldbegriff (ohne Account-Nr./Konto/Bkr/Menge/% zu treffen)
+    var MONEY_RE=/€|kontostand|\bbetrag\b|saldo|\bkurs\b|einstand|kaufpreis|marktwert|restschuld|eigenkapital|nebenkosten|instandhaltung|kreditrate|honorar|umsatz|\bebit\b|\bgewinn\b|auszahlung|einnahmen|\bausgaben\b|\bwert\b|provision|reinigung|verwaltung|steuern|material|entsch|barzahl|anpassung|booking|airbnb|mwst|versorger|pro\s*periode|pro\s*jahr|negativsaldo|kaution/i;
     Object.keys(tabs).forEach(function(tn){ if(views[tn])return; if(!(S[tn]&&S[tn].length))return;
       var hr=hdrRow(tn,0), e=extract(tn,hr);
-      var money=[]; e.cols.forEach(function(c,i){ if(/€|\bwert\b/i.test(String(c||"")))money.push(i); });
+      var money=[]; e.cols.forEach(function(c,i){ if(MONEY_RE.test(String(c||"")))money.push(i); });
       var sumi=money.length?money[money.length-1]:null;
       gridview(tn, tn, e.cols, e.rows, sumi, money, {sheet:tn, srcRows:e.srcRows, headerRow:e.headerRow, edit:"auto"});
       var bkrcol=-1; if(!SHARED[tn]) e.cols.forEach(function(c,i){ if(bkrcol<0 && /buchungskreis|company\s*code|^bkr$/i.test(String(c||"")))bkrcol=i; });

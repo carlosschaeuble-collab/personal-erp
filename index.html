@@ -327,9 +327,10 @@ table.alv input.cell-edit:disabled,table.alv select.cell-edit:disabled{opacity:.
       <b id="brandName">Don Carlos</b><span>Personal ERP</span>
     </div>
     <label class="search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input placeholder="Suchen…" aria-label="Suchen"></label>
-    <div class="sphereseg" id="sphereSeg" title="Welt wählen: Privat / Business">
+    <div class="sphereseg" id="sphereSeg" title="Welt wählen: Privat / Business / Gesamt">
       <button data-sph="privat" class="on">Privat</button>
       <button data-sph="business">Business</button>
+      <button data-sph="gesamt">Gesamt</button>
     </div>
     <button class="livechip" id="refreshBtn" title="Daten neu laden"><span class="d"></span>Live</button>
     <span class="avatar" id="avatar">CS</span>
@@ -382,16 +383,40 @@ var ERP_CFG={
   tabsEl.addEventListener("click",function(e){ var g=e.target.closest("[data-go]"); if(g) go(g.dataset.go); });
   (function(){ var seg=document.getElementById('sphereSeg'); if(seg)seg.addEventListener('click',function(e){ var b=e.target.closest('[data-sph]'); if(b)setSphere(b.dataset.sph); }); })();
   var cur=null, curObj=null, sortState={}, editState={}, AC=[], ACATS=[], ACDOCA_CATLIST=[], ACDOCA_USERRULES=[], acFilter={month:"",kat:""}, mkFilter={};
-  var sphere=(function(){ try{ var s=localStorage.getItem('erp_sphere'); return s==='business'?'business':'privat'; }catch(e){ return 'privat'; } })();
-  var navPrivate=[], navBusiness=[];
-  function activeNav(){ return sphere==='business'?navBusiness:navPrivate; }
+  var sphere=(function(){ try{ var s=localStorage.getItem('erp_sphere'); return (s==='business'||s==='gesamt')?s:'privat'; }catch(e){ return 'privat'; } })();
+  var navPrivate=[], navBusiness=[], navGesamt=[];
+  function activeNav(){ return sphere==='business'?navBusiness:(sphere==='gesamt'?navGesamt:navPrivate); }
+  // „Gesamt" = alle Reiter beider Welten (gemeinsame nur einmal, ohne Welt-Filter).
+  // Codes kollidieren zwischen den Strukturen (A/B/F/G/L) → Privat-Tabs als Basis,
+  // Business-eigene (H/I/J/K) vor „Attachements" einfügen, Open Items (zwei Journale) als Gruppe Privat/Business.
+  function buildGesamtNav(np, nb){
+    var pc={}; np.forEach(function(t){ pc[t.code]=t; });
+    var out=[];
+    np.forEach(function(t){
+      if(t.code==='G'){
+        out.push({code:'G', label:t.label||'Open Items', seite:t.seite||'Open Items', desc:'Forderungen & Verbindlichkeiten · Privat + Business', world:'gesamt', children:[
+          {code:'GP', label:'Privat', seite:'Open Items', desc:'Offene Posten Privat (ARAP-P)', table:'ARAP-P', world:'privat', group:(t.label||'Open Items')},
+          {code:'GB', label:'Business', seite:'Open Items', desc:'Offene Posten Business (ARAP-B)', table:'ARAP-B', world:'business', group:(t.label||'Open Items')}
+        ]});
+      } else if(t.code==='B'){
+        out.push({code:'B', label:t.label, seite:t.seite, desc:t.desc, table:t.table, world:t.world, children:(t.children||[]).slice()});
+      } else { out.push(t); }
+    });
+    var gB=null; for(var i=0;i<nb.length;i++){ if(nb[i].code==='B'){ gB=nb[i]; break; } }
+    var gOut=null; for(var j=0;j<out.length;j++){ if(out[j].code==='B'){ gOut=out[j]; break; } }
+    if(gB&&gOut&&gOut.children){ var have={}; gOut.children.forEach(function(c){ have[c.code]=1; }); (gB.children||[]).forEach(function(c){ if(!have[c.code]){ gOut.children.push(c); have[c.code]=1; } }); }
+    var extras=nb.filter(function(t){ return !pc[t.code]; }); // H, I, J, K – nur Business
+    var li=-1; for(var k=0;k<out.length;k++){ if(out[k].code==='L'){ li=k; break; } } if(li<0)li=out.length;
+    Array.prototype.splice.apply(out, [li,0].concat(extras));
+    return out;
+  }
   function nkS(x){ if(x==null||x==="")return ""; var n=parseFloat(x); return isNaN(n)?String(x).trim():String(Math.round(n)); }
   function sphereOf(key){ var k=nkS(key); if(!k)return ''; var m=(typeof D!=="undefined"&&D&&D.sphere)||{}; if(m[k])return m[k]; var d=k.charAt(0); return d==='1'?'privat':(d==='2'?'business':''); }
   function inSphere(bkr){ return sphere==='gesamt' || sphereOf(bkr)===sphere; }
   function kpi(){ return (K&&K[sphere])||(K&&K.gesamt)||K||{}; }
   function sphereHidesTab(code){ return false; }
-  function updateSphereUI(){ var seg=document.getElementById('sphereSeg'); if(seg)Array.prototype.forEach.call(seg.querySelectorAll('[data-sph]'),function(b){ b.classList.toggle('on', b.dataset.sph===sphere); }); var sb=document.getElementById('sbSphere'); if(sb)sb.textContent='Welt: '+(sphere==='business'?'Business':'Privat'); }
-  function setSphere(s){ s=(s==='business')?'business':'privat'; if(s!==sphere){ sphere=s; try{localStorage.setItem('erp_sphere',s);}catch(e){} } nav=activeNav(); byCode={}; nav.forEach(function(t){byCode[t.code]=t;(t.children||[]).forEach(function(ch){byCode[ch.code]=ch;});}); buildTabs(); updateSphereUI(); go('A'); }
+  function updateSphereUI(){ var seg=document.getElementById('sphereSeg'); if(seg)Array.prototype.forEach.call(seg.querySelectorAll('[data-sph]'),function(b){ b.classList.toggle('on', b.dataset.sph===sphere); }); var sb=document.getElementById('sbSphere'); if(sb)sb.textContent='Welt: '+(sphere==='business'?'Business':sphere==='gesamt'?'Gesamt (Privat + Business)':'Privat'); }
+  function setSphere(s){ s=(s==='business'||s==='gesamt')?s:'privat'; if(s!==sphere){ sphere=s; try{localStorage.setItem('erp_sphere',s);}catch(e){} } nav=activeNav(); byCode={}; nav.forEach(function(t){byCode[t.code]=t;(t.children||[]).forEach(function(ch){byCode[ch.code]=ch;});}); buildTabs(); updateSphereUI(); go('A'); }
   var BUCHCFG={
     CBUCH:{stream:"Detmold",back:"C",after:"C1",konto:"Hauptbuch Detmold",bkr:"1020"},
     H1BUCH:{stream:"Marbella",back:"H",after:"H1.2",konto:"Hauptbuch Marbella",bkr:"2010"},
@@ -474,7 +499,7 @@ var ERP_CFG={
     var em=!!(editState[code]&&v.src);
     var show=[]; cols.forEach(function(c,i){ if(!/^ID/i.test(c)||(em&&editColOf(v,i)!=null)) show.push(i); });
     var items=v.rows.map(function(r,i){return {r:r,oi:i};});
-    if(v.bkrcol!=null&&v.bkrcol>=0&&typeof worldOfKey==="function"){ items=items.filter(function(it){ return worldOfKey(it.r[v.bkrcol])===sphere; }); }
+    if(sphere!=='gesamt'&&v.bkrcol!=null&&v.bkrcol>=0&&typeof worldOfKey==="function"){ items=items.filter(function(it){ return worldOfKey(it.r[v.bkrcol])===sphere; }); }
     var ss=sortState[code];
     if(ss&&!em){ var col=ss.col,dir=ss.dir; items.sort(function(a,b){ var x=a.r[col],y=b.r[col];
         var nx=parseFloat(x),ny=parseFloat(y);
@@ -527,15 +552,15 @@ var ERP_CFG={
     var v=V[tableName]; if(!v||!v.rows)return {sum:0,n:0};
     var cols=v.cols||[]; function ci(re){ for(var i=0;i<cols.length;i++){ if(re.test(String(cols[i]||"")))return i; } return -1; }
     var ic=ci(colRe); if(ic<0)return {sum:0,n:0}; var ib=bkrRe?ci(bkrRe):-1, sum=0,n=0;
-    v.rows.forEach(function(r){ if(ib>=0 && worldOfKey(r[ib])!==sphere) return; var val=moneyNum(r[ic]); if(val!=null){ sum+=val; n++; } });
+    v.rows.forEach(function(r){ if(ib>=0 && sphere!=='gesamt' && worldOfKey(r[ib])!==sphere) return; var val=moneyNum(r[ic]); if(val!=null){ sum+=val; n++; } });
     return {sum:sum,n:n};
   }
   function overviewHTML(){
-    var world=sphere==='business'?'Business':'Privat', BKR=/bkr|buchungskreis|company/i;
+    var world=sphere==='business'?'Business':sphere==='gesamt'?'Gesamt':'Privat', BKR=/bkr|buchungskreis|company/i;
     var cash=ovSum('BACC',/kontostand|saldo|betrag|€/i,BKR).sum;
     var re=ovSum('IMMO',/^wert|marktwert/i,BKR).sum;
     var asset=ovSum('ASSET',/wert/i,BKR).sum;
-    var open=ovSum(sphere==='business'?'ARAP-B':'ARAP-P',/saldo/i,BKR).sum;
+    var open=sphere==='gesamt'?(ovSum('ARAP-P',/saldo/i,BKR).sum+ovSum('ARAP-B',/saldo/i,BKR).sum):ovSum(sphere==='business'?'ARAP-B':'ARAP-P',/saldo/i,BKR).sum;
     var nw=cash+re+asset+open;
     var h=head("Overview · "+world,"Startseite / Cockpit");
     h+='<section class="tiles">';
@@ -544,12 +569,14 @@ var ERP_CFG={
     h+=tile("Immobilien",eur(re),"Objekte (IMMO)");
     h+=tile("Wertpapiere & Co.",eur(asset),"Vermögen (ASSET)");
     h+='</section>';
-    var codes=((D&&D.compList)||[]).filter(function(c){return c.art===sphere;});
+    var codes=((D&&D.compList)||[]).filter(function(c){return sphere==='gesamt'||c.art===sphere;});
     h+='<div class="panel"><div class="alv-bar"><h2>Buchungskreise · '+esc(world)+'</h2><span class="sp"></span><span class="count">'+codes.length+'</span></div><div style="padding:10px 16px 16px">';
     if(!codes.length) h+='<div class="empty">Keine Buchungskreise für diese Welt in COMP hinterlegt.</div>';
-    codes.forEach(function(c){ h+='<div class="comp-row"><span class="comp-code">'+esc(c.schluessel)+'</span><span class="comp-name">'+esc(c.name)+'</span>'+(c.besch?'<span class="comp-desc" title="'+esc(c.besch)+'">'+esc(c.besch)+'</span>':'')+'</div>'; });
+    codes.forEach(function(c){ h+='<div class="comp-row"><span class="comp-code">'+esc(c.schluessel)+'</span><span class="comp-name">'+esc(c.name)+'</span>'+(sphere==='gesamt'?'<span class="ptag'+(c.art==='business'?' org':'')+'" style="margin-left:4px">'+(c.art==='business'?'Business':'Privat')+'</span>':'')+(c.besch?'<span class="comp-desc" title="'+esc(c.besch)+'">'+esc(c.besch)+'</span>':'')+'</div>'; });
     h+='</div></div>';
-    h+='<div class="note-card"><span class="vp">Grundgerüst</span><p>Zwei-Welten-Modell steht: der Umschalter oben wählt <b>'+esc(world)+'</b> (Structure-'+(sphere==='business'?'Business':'Private')+' + ACDOCA-'+(sphere==='business'?'B':'P')+'). Jede Seite zieht ihre Daten aus der hinterlegten Tabelle (Spalte Tabellenname). Spezial-Auswertungen (GuV, Abrechnungen, AR/AP-Kacheln, Immobilien) bauen wir als Nächstes aus.</p></div>';
+    h+= sphere==='gesamt'
+      ? '<div class="note-card"><span class="vp">Gesamt</span><p>Konsolidierte Sicht über <b>beide Welten</b> (Privat + Business). Alle Reiter beider Strukturen sind sichtbar; in gemeinsamen Tabellen (z.&nbsp;B. Bank Accounts, Immobilien) wird <b>nicht</b> nach Welt gefiltert — du siehst alle Datensätze. Die offenen Posten der beiden Journale (ARAP-P / ARAP-B) erscheinen unter „Open Items" getrennt als Privat / Business.</p></div>'
+      : '<div class="note-card"><span class="vp">Grundgerüst</span><p>Zwei-Welten-Modell steht: der Umschalter oben wählt <b>'+esc(world)+'</b> (Structure-'+(sphere==='business'?'Business':'Private')+' + ACDOCA-'+(sphere==='business'?'B':'P')+'). Jede Seite zieht ihre Daten aus der hinterlegten Tabelle (Spalte Tabellenname). Spezial-Auswertungen (GuV, Abrechnungen, AR/AP-Kacheln, Immobilien) bauen wir als Nächstes aus.</p></div>';
     return h;
   }
   function tile(k,v,d,big){ return '<div class="tile'+(big?' big':'')+'"><p class="k">'+esc(k)+'</p><div class="v">'+v+'</div>'+(d?'<div class="d'+(/-/.test(v)?' neg':'')+'">'+esc(d)+'</div>':'')+'</div>'; }
@@ -1414,7 +1441,7 @@ var ERP_CFG={
       .catch(function(e){ __acctIdDone=false; toast("✗ ID-Vergabe fehlgeschlagen: "+(e.message||e),true); });
   }
   function boot(data, keepTab){
-    D=data; navPrivate=D.navPrivate||[]; navBusiness=D.navBusiness||[]; nav=activeNav(); V=D.views; K=D.kpis; AC=D.acdoca||[]; ACATS=D.acats||[];
+    D=data; navPrivate=D.navPrivate||[]; navBusiness=D.navBusiness||[]; navGesamt=buildGesamtNav(navPrivate,navBusiness); nav=activeNav(); V=D.views; K=D.kpis; AC=D.acdoca||[]; ACATS=D.acats||[];
     if(D.brand){ var bn=document.getElementById('brandName'); if(bn)bn.textContent=D.brand; try{document.title=D.brand+" · Personal ERP";}catch(e){} }
     ACDOCA_CATLIST=(D.cats||[]).map(function(c){return c.kat;}).filter(Boolean);
     ACDOCA_USERRULES=(D.cats||[]).map(function(c){ var kw=(c.keywords||[]).map(function(k){return k.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");}); return kw.length?[new RegExp(kw.join("|"),"i"),c.kat]:null; }).filter(Boolean);

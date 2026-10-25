@@ -57,6 +57,7 @@ table.alv tbody tr{transition:background .1s ease}
 .tab{position:relative}
 .tab>.lbl{display:flex;align-items:center;height:44px;padding:0 14px;font-size:13px;letter-spacing:.005em;color:var(--ink-2);cursor:pointer;border-bottom:2.5px solid transparent;border-radius:7px 7px 0 0;white-space:nowrap;transition:color .13s ease,background .13s ease}
 .tab>.lbl:hover{color:var(--ink);background:var(--row-hover)}
+.tabsep{flex:0 0 auto;align-self:center;width:1px;height:22px;background:var(--line-strong);margin:0 8px}
 .tab.active>.lbl{color:var(--accent-ink);border-bottom-color:var(--accent);font-weight:600}
 .tab .caret{display:none}
 .flyout{position:absolute;top:100%;left:0;min-width:240px;background:var(--surface);border:1px solid var(--line);box-shadow:0 8px 20px rgba(29,45,59,.14);border-radius:0 0 8px 8px;padding:6px;display:none;z-index:60}
@@ -378,6 +379,7 @@ var ERP_CFG={
         fly.innerHTML=html; tab.appendChild(fly);
       }
       tabsEl.appendChild(tab);
+      if(/attach/i.test(t.label||"")||t.code==='L'){ var sep=document.createElement("div"); sep.className="tabsep"; tabsEl.appendChild(sep); }
     });
   }
   tabsEl.addEventListener("click",function(e){ var g=e.target.closest("[data-go]"); if(g) go(g.dataset.go); });
@@ -388,7 +390,7 @@ var ERP_CFG={
   function activeNav(){ return sphere==='business'?navBusiness:(sphere==='gesamt'?navGesamt:navPrivate); }
   // „Gesamt" = alle Reiter beider Welten (gemeinsame nur einmal, ohne Welt-Filter).
   // Codes kollidieren zwischen den Strukturen (A/B/F/G/L) → Privat-Tabs als Basis,
-  // Business-eigene (H/I/J/K) vor „Attachements" einfügen, Open Items (zwei Journale) als Gruppe Privat/Business.
+  // Business-eigene (H/I/J/K) NACH „Attachements" einfügen, Open Items (zwei Journale) als Gruppe Privat/Business.
   function buildGesamtNav(np, nb){
     var pc={}; np.forEach(function(t){ pc[t.code]=t; });
     var out=[];
@@ -406,8 +408,9 @@ var ERP_CFG={
     var gOut=null; for(var j=0;j<out.length;j++){ if(out[j].code==='B'){ gOut=out[j]; break; } }
     if(gB&&gOut&&gOut.children){ var have={}; gOut.children.forEach(function(c){ have[c.code]=1; }); (gB.children||[]).forEach(function(c){ if(!have[c.code]){ gOut.children.push(c); have[c.code]=1; } }); }
     var extras=nb.filter(function(t){ return !pc[t.code]; }); // H, I, J, K – nur Business
-    var li=-1; for(var k=0;k<out.length;k++){ if(out[k].code==='L'){ li=k; break; } } if(li<0)li=out.length;
-    Array.prototype.splice.apply(out, [li,0].concat(extras));
+    var li=-1; for(var k=0;k<out.length;k++){ if(out[k].code==='L'){ li=k; break; } }
+    var at=(li<0)?out.length:li+1; // Business-eigene Reiter NACH „Attachements" einfügen
+    Array.prototype.splice.apply(out, [at,0].concat(extras));
     return out;
   }
   function nkS(x){ if(x==null||x==="")return ""; var n=parseFloat(x); return isNaN(n)?String(x).trim():String(Math.round(n)); }

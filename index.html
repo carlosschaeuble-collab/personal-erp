@@ -301,6 +301,47 @@ table.alv input.cell-edit:disabled,table.alv select.cell-edit:disabled{opacity:.
 .login-status.err{color:var(--neg)}
 .login-foot{font-size:11.5px;color:var(--ink-3);margin-top:16px}
 @media(max-width:760px){.shell .search{display:none}.tabs{overflow-x:auto}.flyout{display:none!important}.calc{grid-template-columns:1fr}.tile .v{font-size:23px}.dl{grid-template-columns:130px 1fr}}
+@media(max-width:600px){
+  /* Kopfzeile: eine Zeile, kompakt — App-Name links, Umschalter+Live+Avatar rechts */
+  .shell{gap:8px;padding:0 10px}
+  .brand{gap:6px;min-width:0;flex:0 1 auto}
+  .brand .cse{height:20px}
+  .brand b{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .brand span{display:none}
+  .sphereseg{margin-left:auto;flex:0 0 auto}
+  .sphereseg button{padding:4px 8px;font-size:10.5px;font-weight:600}
+  .livechip{padding:5px 6px;gap:0}
+  .livechip .lv{display:none}
+  .avatar{width:26px;height:26px;font-size:11px}
+  /* Tab-Band: etwas schlanker */
+  .tabs{padding:0 6px}
+  .tab>.lbl{height:42px;padding:0 11px;font-size:12.5px}
+  /* Seitenränder knapper */
+  .page{padding:14px 12px 22px}
+  .page-head h1{font-size:18px}
+  /* Kacheln: Hero volle Breite, Rest 2 pro Reihe */
+  .tiles{grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+  .tile{padding:12px 13px;border-radius:12px}
+  .tile.big{grid-column:1/-1}
+  .tile .k{font-size:10.5px;margin-bottom:5px}
+  .tile .v{font-size:19px}
+  .tile.big .v{font-size:27px}
+  .tile .d{font-size:11.5px}
+  /* Panel-Kopf (ALV-Leiste): umbrechen, Suche in eigene Zeile */
+  .alv-bar{flex-wrap:wrap;row-gap:9px;padding:10px 12px}
+  .alv-bar h2{white-space:nowrap;font-size:13.5px}
+  .alv-bar .sp{flex-basis:100%;flex-grow:0;height:0}
+  .mini-search{flex:1 1 100%}
+  .mini-search input{width:100%}
+  /* Tabellen: dichter, damit mehr sichtbar ist (Rest scrollt horizontal) */
+  table.alv th,table.alv td{padding:6px 9px;font-size:12.5px}
+  .panel,.note-card,.osec,.obj-head{border-radius:12px}
+  /* Statusleiste: nur das Wesentliche */
+  .statusbar{height:auto;padding:6px 12px;font-size:11.5px}
+  .statusbar .r{display:none}
+  /* Buchen-Formular: volle Breite */
+  .bform{max-width:none!important}
+}
 </style>
 </head>
 <body>
@@ -333,7 +374,7 @@ table.alv input.cell-edit:disabled,table.alv select.cell-edit:disabled{opacity:.
       <button data-sph="business">Business</button>
       <button data-sph="gesamt">Gesamt</button>
     </div>
-    <button class="livechip" id="refreshBtn" title="Daten neu laden"><span class="d"></span>Live</button>
+    <button class="livechip" id="refreshBtn" title="Daten neu laden"><span class="d"></span><span class="lv">Live</span></button>
     <span class="avatar" id="avatar">CS</span>
   </header>
   <nav class="tabs sticky" id="tabs" style="top:46px"></nav>

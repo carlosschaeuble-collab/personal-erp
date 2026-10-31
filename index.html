@@ -384,7 +384,7 @@ var ERP_CFG={
   }
   tabsEl.addEventListener("click",function(e){ var g=e.target.closest("[data-go]"); if(g) go(g.dataset.go); });
   (function(){ var seg=document.getElementById('sphereSeg'); if(seg)seg.addEventListener('click',function(e){ var b=e.target.closest('[data-sph]'); if(b)setSphere(b.dataset.sph); }); })();
-  var cur=null, curObj=null, sortState={}, editState={}, AC=[], ACATS=[], ACDOCA_CATLIST=[], ACDOCA_USERRULES=[], acFilter={month:"",kat:""}, mkFilter={};
+  var cur=null, curObj=null, sortState={}, editState={}, AC=[], ACATS=[], ACDOCA_CATLIST=[], ACDOCA_USERRULES=[], acFilter={month:"",kat:""}, mkFilter={}, segYear=null;
   var sphere=(function(){ try{ var s=localStorage.getItem('erp_sphere'); return (s==='business'||s==='gesamt')?s:'privat'; }catch(e){ return 'privat'; } })();
   var navPrivate=[], navBusiness=[], navGesamt=[];
   function activeNav(){ return sphere==='business'?navBusiness:(sphere==='gesamt'?navGesamt:navPrivate); }
@@ -1008,24 +1008,31 @@ var ERP_CFG={
     });
     return h;
   }
-  function buchenHTML(code){
-    var cfg=BUCHCFG[code]||BUCHCFG.CBUCH, page=cfg.page;
-    var segLbl=(byCode[page]&&byCode[page].label)||SHORT[page]||cfg.stream||page;
-    var t=byCode[code]||{label:'Hauptbuchbelege buchen'};
+  // Buchungs-Formular (wird oben im Segment-Cockpit und auf der eigenen Buchen-Seite verwendet)
+  function buchenFormHTML(code){
+    var cfg=BUCHCFG[code]||BUCHCFG.CBUCH;
     var tx=AC.filter(function(x){ return matchSeg(x,cfg); });
     var begMap={}; tx.forEach(function(x){ if(x.empf&&x.kat&&x.kat!=="Unklar") begMap[x.empf]=x.kat; }); window.__BK_BEGMAP=begMap;
     var begs=Object.keys(begMap).sort(function(a,b){return a.localeCompare(b);});
     var cats=(ACDOCA_CATLIST.length?ACDOCA_CATLIST.slice():ACDOCA_CATS.slice()); ACATS.forEach(function(c){ if(cats.indexOf(c)<0) cats.push(c); }); if(cats.indexOf("Unklar")<0) cats.push("Unklar");
     var bkList=(D&&D.bkrList)||[], bkKeys=bkList.map(function(e){return e.schluessel;}), bkName={}; bkList.forEach(function(e){bkName[e.schluessel]=e.name;}); if(cfg.bkr&&bkKeys.indexOf(cfg.bkr)<0) bkKeys.unshift(cfg.bkr);
     var today=new Date().toISOString().slice(0,10);
-    var h='<div class="crumb" data-go="'+esc(page)+'" style="cursor:pointer">‹ '+esc(segLbl)+'</div><div class="page-head"><h1>'+esc(t.label)+'</h1></div>';
-    h+='<div class="panel"><div style="padding:18px"><div class="bform">';
+    var footer='→ '+esc(cfg.journal||"Journal")+(cfg.stream?(' · Stream '+esc(cfg.stream)):(' · Buchungskreis '+esc(cfg.bkr)));
+    var h='<div class="panel"><div class="alv-bar"><h2>Hauptbuchbeleg buchen</h2><span class="sp"></span><span class="muted" style="font-size:12px">'+footer+'</span></div><div style="padding:16px 16px 18px"><div class="bform" style="max-width:none">';
     h+='<div class="two"><div class="row"><label>Datum</label><input type="date" id="bk_datum" value="'+today+'"></div><div class="row"><label>Betrag (€)</label><input id="bk_betrag" inputmode="text" placeholder="-123,45  ·  minus = Ausgabe"></div></div>';
-    h+='<div class="row"><label>Begünstiger</label><input id="bk_empf" list="bk_begs" placeholder="z. B. Firma / Person"><datalist id="bk_begs">'+begs.map(function(b){return '<option value="'+esc(b)+'">';}).join('')+'</datalist></div>';
-    h+='<div class="two"><div class="row"><label>Kategorie</label><select id="bk_kat">'+cats.map(function(c){return '<option>'+esc(c)+'</option>';}).join('')+'</select></div><div class="row"><label>Buchungskreis</label><select id="bk_bkr">'+bkKeys.map(function(k){ var nm=bkName[k]; return '<option value="'+esc(k)+'"'+(k===cfg.bkr?' selected':'')+'>'+esc(k+(nm?' – '+nm:''))+'</option>'; }).join('')+'</select></div></div>';
-    h+='<div class="row"><label>Verwendungszweck <span class="muted" style="font-weight:400">(optional)</span></label><input id="bk_zweck" placeholder="z. B. Rechnung Nr. …"></div>';
-    h+='<div style="display:flex;gap:12px;align-items:center;margin-top:6px"><button class="editbtn on" data-buchen="'+esc(code)+'">Beleg buchen</button><span class="muted" style="font-size:12px">→ '+esc(cfg.journal||"Journal")+(cfg.stream?(' · Stream '+esc(cfg.stream)):(' · Buchungskreis '+esc(cfg.bkr)))+'</span></div>';
+    h+='<div class="two"><div class="row"><label>Begünstiger</label><input id="bk_empf" list="bk_begs" placeholder="z. B. Firma / Person"><datalist id="bk_begs">'+begs.map(function(b){return '<option value="'+esc(b)+'">';}).join('')+'</datalist></div><div class="row"><label>Kategorie</label><select id="bk_kat">'+cats.map(function(c){return '<option>'+esc(c)+'</option>';}).join('')+'</select></div></div>';
+    h+='<div class="two"><div class="row"><label>Buchungskreis</label><select id="bk_bkr">'+bkKeys.map(function(k){ var nm=bkName[k]; return '<option value="'+esc(k)+'"'+(k===cfg.bkr?' selected':'')+'>'+esc(k+(nm?' – '+nm:''))+'</option>'; }).join('')+'</select></div><div class="row"><label>Verwendungszweck <span class="muted" style="font-weight:400">(optional)</span></label><input id="bk_zweck" placeholder="z. B. Rechnung Nr. …"></div></div>';
+    h+='<div style="margin-top:4px"><button class="editbtn on" data-buchen="'+esc(code)+'">Beleg buchen</button></div>';
     h+='</div></div></div>';
+    return h;
+  }
+  function buchenHTML(code){
+    var cfg=BUCHCFG[code]||BUCHCFG.CBUCH, page=cfg.page;
+    var segLbl=(byCode[page]&&byCode[page].label)||SHORT[page]||cfg.stream||page;
+    var t=byCode[code]||{label:'Hauptbuchbelege buchen'};
+    var tx=AC.filter(function(x){ return matchSeg(x,cfg); });
+    var h='<div class="crumb" data-go="'+esc(page)+'" style="cursor:pointer">‹ '+esc(segLbl)+'</div><div class="page-head"><h1>'+esc(t.label)+'</h1></div>';
+    h+=buchenFormHTML(code);
     h+='<div class="panel"><div class="alv-bar"><h2>Zuletzt gebucht</h2><span class="sp"></span><span class="count">'+tx.length+'</span></div><div class="alv-wrap"><table class="alv"><thead><tr><th>Datum</th><th>Begünstiger</th><th>Kategorie</th><th class="num">Betrag</th></tr></thead><tbody>';
     tx.slice().sort(function(a,b){return a.datum<b.datum?1:-1;}).slice(0,8).forEach(function(x){ var neg=x.betrag<0; h+='<tr><td>'+esc(x.datum)+'</td><td class="name">'+esc(x.empf)+'</td><td>'+esc(x.kat)+'</td><td class="num '+(neg?'neg':'pos')+'">'+eur(x.betrag,2)+'</td></tr>'; });
     h+='</tbody></table></div></div>';
@@ -1056,7 +1063,7 @@ var ERP_CFG={
     }
     toast("Buche Beleg "+id+" …");
     window.ERP_append(jr,[row]).then(function(){
-      if(window.__SHEETS){ var A=window.__SHEETS[jr]||(window.__SHEETS[jr]=[]); A.push(row); boot(parseSheets(window.__SHEETS),cfg.after); }
+      if(window.__SHEETS){ var A=window.__SHEETS[jr]||(window.__SHEETS[jr]=[]); A.push(row); boot(parseSheets(window.__SHEETS),cfg.page||cfg.after); }
       toast("✓ Beleg "+id+" gebucht: "+empf+" "+eur(betrag,2));
     }).catch(function(e){ toast("✗ Fehler: "+(e.message||e),true); });
   }
@@ -1072,28 +1079,40 @@ var ERP_CFG={
     var cfg=BUCHCFG[buchCode]||BUCHCFG.CBUCH, page=cfg.page;
     var lbl=(byCode[page]&&byCode[page].label)||SHORT[page]||page;
     var sub=(byCode[page]&&byCode[page].desc)||"";
-    var tag=cfg.journal+(cfg.stream?(" · Stream "+cfg.stream):(" · Buchungskreis "+cfg.bkr));
-    var tx=AC.filter(function(x){ return matchSeg(x,cfg); });
-    var h='<div class="page-head"><div><h1>'+esc(lbl)+'</h1>'+(sub?'<div class="sub">'+esc(sub)+'</div>':'')+'</div><span style="flex:1"></span><button class="editbtn on" data-go="'+esc(buchCode)+'">＋ Hauptbuchbeleg buchen</button></div>';
-    if(!tx.length){ h+='<div class="note-card"><span class="vp">'+esc(lbl)+'</span><p>Noch keine Belege. Mit <b>＋ Hauptbuchbeleg buchen</b> legst du den ersten an — er landet im Journal <b>'+esc(cfg.journal)+'</b>'+(cfg.stream?(' (Stream '+esc(cfg.stream)+')'):(' (Buchungskreis '+esc(cfg.bkr)+')'))+'.</p></div>'; return h; }
-    var aus=0,ein=0; tx.forEach(function(x){ if(x.betrag<0)aus+=x.betrag; else ein+=x.betrag; }); var saldo=aus+ein;
+    var all=AC.filter(function(x){ return matchSeg(x,cfg); });
+    function yearOf(x){ var m=String(x.datum||"").match(/(\d{4})/); return m?m[1]:""; }
+    // Kopf
+    var h='<div class="page-head"><div><h1>'+esc(lbl)+'</h1>'+(sub?'<div class="sub">'+esc(sub)+'</div>':'')+'</div></div>';
+    // 1) Oben: Hauptbuchbeleg direkt buchen
+    h+=buchenFormHTML(buchCode);
+    if(!all.length){ h+='<div class="note-card"><span class="vp">'+esc(lbl)+'</span><p>Noch keine Belege. Trag oben den ersten ein — er landet im Journal <b>'+esc(cfg.journal)+'</b>'+(cfg.stream?(' (Stream '+esc(cfg.stream)+')'):(' (Buchungskreis '+esc(cfg.bkr)+')'))+' und erscheint dann hier.</p></div>'; return h; }
+    // Jahr wählen (jüngstes als Default)
+    var years={}; all.forEach(function(x){ var y=yearOf(x); if(y)years[y]=1; });
+    var yearList=Object.keys(years).sort().reverse();
+    var selYear=(segYear&&years[segYear])?segYear:(yearList[0]||"");
+    var tx=all.filter(function(x){ return yearOf(x)===selYear; });
+    if(yearList.length>1){ h+='<div style="margin:2px 0 14px"><span class="seg">'+yearList.map(function(y){ return '<button class="seg-b'+(y===selYear?' on':'')+'" data-segyear="'+esc(y)+'">'+esc(y)+'</button>'; }).join('')+'</span></div>'; }
+    // 2) Jahres-Kacheln: Kosten, Einnahmen, Saldo, Ø/Monat
+    var aus=0,ein=0,monthsSet={}; tx.forEach(function(x){ if(x.betrag<0)aus+=x.betrag; else ein+=x.betrag; var mm=String(x.datum||"").slice(0,7); if(/^\d{4}-\d{2}$/.test(mm))monthsSet[mm]=1; });
+    var saldo=aus+ein, nMonths=Math.max(1,Object.keys(monthsSet).length), avg=aus/nMonths;
     h+='<section class="tiles">'
-      +tile("Kosten (Ist)",eur(aus,0),esc(lbl)+" · alle Belege","big")
-      +tile("Einnahmen","+"+eur(ein,0),"Gutschriften / Mieten")
-      +'<div class="tile"><p class="k">Saldo</p><div class="v" style="color:'+(saldo>=0?'var(--pos)':'var(--neg)')+'">'+(saldo>=0?"+":"")+eur(saldo,0)+'</div><div class="d">Einnahmen − Kosten</div></div>'
-      +tile("Belege",tx.length,"im Journal")
+      +tile("Jahreskosten "+selYear,eur(aus,0),esc(lbl),"big")
+      +tile("Einnahmen "+selYear,"+"+eur(ein,0),"Gutschriften / Mieten")
+      +'<div class="tile"><p class="k">Saldo '+esc(selYear)+'</p><div class="v" style="color:'+(saldo>=0?'var(--pos)':'var(--neg)')+'">'+(saldo>=0?"+":"")+eur(saldo,0)+'</div><div class="d">Einnahmen − Kosten</div></div>'
+      +tile("Ø Kosten / Monat",eur(avg,0),nMonths+" Monat"+(nMonths===1?"":"e")+" mit Buchungen")
       +'</section>';
-    // Belegliste — alle Einzelbuchungen, neueste zuerst
+    // 3) Links: letzte Einträge  ·  Rechts: Auswertung nach Kategorie (Jahr)
+    h+='<div class="ov-cols">';
     var sorted=tx.slice().sort(function(a,b){ return a.datum<b.datum?1:a.datum>b.datum?-1:(a.id<b.id?1:a.id>b.id?-1:0); });
-    h+='<div class="panel"><div class="alv-bar"><h2>Belege</h2><span class="count">'+tx.length+'</span><span class="sp"></span><span class="muted" style="font-size:12px">'+esc(tag)+'</span></div><div class="alv-wrap"><table class="alv"><thead><tr><th>Beleg</th><th>Datum</th><th>Begünstiger</th><th>Verwendungszweck</th><th>Kategorie</th><th class="num">Betrag</th></tr></thead><tbody>';
-    sorted.forEach(function(x){ var neg=x.betrag<0; h+='<tr><td class="idtag">'+esc(x.id)+'</td><td>'+esc(String(x.datum||"").slice(0,10))+'</td><td class="name">'+esc(x.empf)+'</td><td>'+esc(x.zweck||"")+'</td><td>'+esc(x.kat||"")+'</td><td class="num '+(neg?'neg':'pos')+'">'+eur(x.betrag,2)+'</td></tr>'; });
-    h+='</tbody><tfoot><tr><td colspan="5">Summe · '+tx.length+' Belege</td><td class="num '+(saldo<0?'neg':'pos')+'">'+eur(saldo,2)+'</td></tr></tfoot></table></div></div>';
-    // Nach Begünstiger
-    var byB={}; tx.forEach(function(x){ var k=x.empf||"—"; if(!byB[k])byB[k]={sum:0,n:0,kat:x.kat}; byB[k].sum+=x.betrag; byB[k].n++; });
-    var keys=Object.keys(byB).sort(function(a,b){return byB[a].sum-byB[b].sum;}); var mx=1; keys.forEach(function(k){ mx=Math.max(mx,Math.abs(byB[k].sum)); });
-    h+='<div class="panel"><div class="alv-bar"><h2>Nach Begünstiger</h2><span class="sp"></span><span class="count">'+keys.length+'</span></div><div style="padding:14px 16px 16px">';
-    keys.forEach(function(k){ var s=byB[k].sum, w=Math.max(2,Math.abs(s)/mx*100), neg=s<0; h+='<div class="bar-row"><div class="bl pname" title="'+esc(k)+'"><span class="pnm">'+esc(k)+'</span></div><div class="bt"><div class="bf" style="width:'+w.toFixed(1)+'%;background:'+(neg?'var(--accent)':'var(--pos)')+'"></div></div><div class="bv">'+eur(s,0)+' <span class="muted" style="font-weight:400">· '+esc(byB[k].kat||"–")+'</span></div></div>'; });
+    h+='<div class="panel"><div class="alv-bar"><h2>Letzte Einträge</h2><span class="count">'+tx.length+'</span><span class="sp"></span><span class="muted" style="font-size:12px">'+esc(selYear)+'</span></div><div class="alv-wrap" style="max-height:440px"><table class="alv"><thead><tr><th>Datum</th><th>Beleg</th><th>Begünstiger</th><th class="num">Betrag</th></tr></thead><tbody>';
+    sorted.forEach(function(x){ var neg=x.betrag<0; h+='<tr><td>'+esc(String(x.datum||"").slice(0,10))+'</td><td class="idtag">'+esc(x.id)+'</td><td class="name">'+esc(x.empf)+'</td><td class="num '+(neg?'neg':'pos')+'">'+eur(x.betrag,2)+'</td></tr>'; });
+    h+='</tbody><tfoot><tr><td colspan="3">Summe · '+tx.length+' Belege</td><td class="num '+(saldo<0?'neg':'pos')+'">'+eur(saldo,2)+'</td></tr></tfoot></table></div></div>';
+    var byK={}; tx.forEach(function(x){ var k=x.kat||"—"; if(!byK[k])byK[k]={sum:0,n:0}; byK[k].sum+=x.betrag; byK[k].n++; });
+    var keys=Object.keys(byK).sort(function(a,b){return byK[a].sum-byK[b].sum;}); var mx=1; keys.forEach(function(k){ mx=Math.max(mx,Math.abs(byK[k].sum)); });
+    h+='<div class="panel"><div class="alv-bar"><h2>Nach Kategorie</h2><span class="count">'+keys.length+'</span><span class="sp"></span><span class="muted" style="font-size:12px">'+esc(selYear)+'</span></div><div style="padding:14px 16px 16px">';
+    keys.forEach(function(k){ var s=byK[k].sum, w=Math.max(2,Math.abs(s)/mx*100), neg=s<0; h+='<div class="bar-row"><div class="bl pname" title="'+esc(k)+'"><span class="pnm">'+esc(k)+'</span></div><div class="bt"><div class="bf" style="width:'+w.toFixed(1)+'%;background:'+(neg?'var(--accent)':'var(--pos)')+'"></div></div><div class="bv '+(neg?'':'pos')+'">'+eur(s,0)+' <span class="muted" style="font-weight:400">· '+byK[k].n+'</span></div></div>'; });
     h+='</div></div>';
+    h+='</div>';
     return h;
   }
   function detmoldHTML(){ return segmentCockpitHTML('CBUCH'); }
@@ -1446,6 +1465,7 @@ var ERP_CFG={
     var acl=e.target.closest("[data-acclear]"); if(acl){ acFilter.kat=""; render(); return; }
     var ak=e.target.closest("[data-ackat]"); if(ak){ acFilter.kat=(acFilter.kat===ak.dataset.ackat?"":ak.dataset.ackat); render(); return; }
     var bk=e.target.closest("[data-buchen]"); if(bk){ doBuchen(bk.dataset.buchen); return; }
+    var sy=e.target.closest("[data-segyear]"); if(sy){ segYear=sy.dataset.segyear; render(); return; }
     var mc=e.target.closest("[data-mkcat]"); if(mc){ var c=mc.dataset.mkcat; if(mkFilter.excl[c]) delete mkFilter.excl[c]; else mkFilter.excl[c]=1; render(); return; }
     var o=e.target.closest("[data-obj]"); if(o){ var pp=o.dataset.obj.split(":"); goObj(pp[0],+pp[1]); return; }
     var b=e.target.closest("[data-back]"); if(b){ go(b.dataset.back); return; }

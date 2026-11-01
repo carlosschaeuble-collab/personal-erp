@@ -1095,6 +1095,31 @@ var ERP_CFG={
     var s=String(mx+1), pad=cfg.pad||4; while(s.length<pad)s="0"+s;
     return cfg.prefix+"-"+s;
   }
+  // Journal-Zeile strikt nach dem AKTUELLEN Spalten-Header der Ziel-Tabelle bauen (schema-robust, egal ob ACDOCA-P/-B oder umgestellt)
+  function journalRow(jr, v){
+    var S=(typeof window!=="undefined"&&window.__SHEETS)||{}, hdr=(S[jr]&&S[jr][0])||null;
+    function cell(h){ h=String(h==null?"":h).trim();
+      if(/sachkonto/i.test(h)) return "";
+      if(/^konto$|^bank$/i.test(h)) return v.konto||"";
+      if(/buchungsdatum|^datum$|^date$/i.test(h)) return v.date||"";
+      if(/document\s*no|^id\b/i.test(h)) return v.doc||"";
+      if(/business\s*partner/i.test(h)) return "";
+      if(/empf(ä|ae)nger|gegenpartei|^name$/i.test(h)) return v.name||"";
+      if(/verwendungszweck|^reference$/i.test(h)) return v.ref||"";
+      if(/betrag|^amount/i.test(h)) return (v.amount==null?"":v.amount);
+      if(/currency|w(ä|ae)hrung/i.test(h)) return v.currency||"";
+      if(/kategorie|^category$/i.test(h)) return v.category||"";
+      if(/buchungskreis|company\s*code/i.test(h)) return v.bkr||"";
+      if(/^typ$|payment\s*type/i.test(h)) return v.type||"";
+      if(/quelle/i.test(h)) return v.quelle||"";
+      if(/objekt|stream/i.test(h)) return v.stream||"";
+      if(/ist\s*\/\s*plan|^ist$/i.test(h)) return v.istplan||"Ist";
+      return "";
+    }
+    if(hdr&&hdr.length) return hdr.map(cell);
+    if(/-B$/i.test(jr)) return [v.date,v.doc,v.konto||"","",v.name,v.ref,(v.amount==null?"":v.amount),v.currency||"EUR",v.category,v.bkr,"","",""];
+    return [v.doc,v.date,v.konto||"",v.name,v.ref,(v.amount==null?"":v.amount),v.category,v.type||"",v.bkr,v.quelle||"",v.stream||"","",v.istplan||"Ist",""];
+  }
   function doBuchen(code){
     var cfg=BUCHCFG[code]||BUCHCFG.CBUCH;
     if(!window.ERP_append){ toast("Buchen braucht Anmeldung — bitte neu einloggen.",true); return; }
@@ -1105,12 +1130,7 @@ var ERP_CFG={
     if(!betrag){ toast("Bitte gültigen Betrag angeben (z. B. -123,45).",true); return; }
     var jr=cfg.journal||"ACDOCA";
     var id=nextBelegId(cfg);
-    var row;
-    if(cfg.schema==="B"){ // ACDOCA-B englisch: DATE,DOCUMENT NO,PAYMENT TYPE,BANK,BUSINESS PARTNER,NAME,REFERENCE,AMOUNT,CURRENCY,CATEGORY,COMPANY CODE,ACCOUNT,COA,NOTE
-      row=[datum,id,"Hauptbuchbeleg","","",empf,zweck,betrag,"EUR",kat||"Unklar",bkr,"","",""];
-    } else {              // ACDOCA-P deutsch: ID,Buchungsdatum,Konto,Empfänger,Verwendungszweck,Betrag,Kategorie,Typ,Buchungskreis,Quelle,Objekt/Stream,Sachkonto,Ist/Plan,Notiz
-      row=[id,datum,cfg.konto||"",empf,zweck,betrag,kat||"Unklar","Hauptbuchbeleg",bkr,cfg.konto||"",cfg.stream||"","","Ist",""];
-    }
+    var row=journalRow(jr,{date:datum,doc:id,konto:cfg.konto||"",name:empf,ref:zweck,amount:betrag,currency:"EUR",category:kat||"Unklar",bkr:bkr,type:"Hauptbuchbeleg",quelle:cfg.konto||"",stream:cfg.stream||"",istplan:"Ist"});
     toast("Buche Beleg "+id+" …");
     window.ERP_append(jr,[row]).then(function(){
       if(window.__SHEETS){ var A=window.__SHEETS[jr]||(window.__SHEETS[jr]=[]); A.push(row); boot(parseSheets(window.__SHEETS),cfg.page||cfg.after); }
@@ -1573,7 +1593,7 @@ var ERP_CFG={
     if(!window.ERP_append){ toast("Import braucht Anmeldung — bitte neu einloggen.",true); return; }
     var jr=(ctx&&ctx.journal)||"ACDOCA";
     function uid(){ return "tx"+Date.now().toString(36)+Math.floor(Math.random()*1e4).toString(36); }
-    var rows=fresh.map(function(t){ return [uid(),t.datum,t.konto,t.empf,t.zweck||"",t.betrag,t.kat,t.typ,t.bkr||"",t.quelle||"","","","Ist",""]; });
+    var rows=fresh.map(function(t){ return journalRow(jr,{date:t.datum,doc:uid(),konto:t.konto,name:t.empf,ref:t.zweck||"",amount:t.betrag,currency:"EUR",category:t.kat,bkr:t.bkr||"",type:t.typ||"",quelle:t.quelle||"",stream:"",istplan:"Ist"}); });
     toast("Importiere "+rows.length+" Buchungen in "+jr+" …");
     window.ERP_append(jr,rows).then(function(){
       if(window.__SHEETS){ var A=window.__SHEETS[jr]||(window.__SHEETS[jr]=[]); rows.forEach(function(r){A.push(r);}); var back=(ctx&&ctx.back)||'F'; boot(parseSheets(window.__SHEETS),back); if(!ctx) goObj('F',oi); }

@@ -1062,7 +1062,7 @@ var ERP_CFG={
   function sachkontoOptionsHTML(bkr){
     var list=((D&&D.coaByBkr)||{})[bkr]||[];
     var o='<option value="">— kein Sachkonto</option>';
-    list.forEach(function(e){ o+='<option value="'+esc(e.account)+'" data-coa="'+esc(e.chart||"")+'">'+esc(e.account+(e.desc?(' · '+e.desc):''))+'</option>'; });
+    list.forEach(function(e){ o+='<option value="'+esc(e.account)+'" data-coa="'+esc(e.chart||"")+'" data-cat="'+esc(e.cat||"")+'">'+esc(e.account+(e.desc?(' · '+e.desc):''))+'</option>'; });
     return o;
   }
   function buchenFormHTML(code){
@@ -1076,12 +1076,21 @@ var ERP_CFG={
     var footer='→ '+esc(cfg.journal||"Journal")+(cfg.stream?(' · Stream '+esc(cfg.stream)):(' · Buchungskreis '+esc(cfg.bkr)));
     var h='<div class="panel"><div class="alv-bar"><h2>Hauptbuchbeleg buchen</h2><span class="sp"></span><span class="muted" style="font-size:12px">'+footer+'</span></div><div style="padding:16px 16px 18px"><div class="bform" style="max-width:none">';
     h+='<div class="two"><div class="row"><label>Datum</label><input type="date" id="bk_datum" value="'+today+'"></div><div class="row"><label>Betrag (€)</label><input id="bk_betrag" inputmode="text" placeholder="-123,45  ·  minus = Ausgabe"></div></div>';
-    h+='<div class="two"><div class="row"><label>Begünstiger</label><input id="bk_empf" list="bk_begs" placeholder="z. B. Firma / Person"><datalist id="bk_begs">'+begs.map(function(b){return '<option value="'+esc(b)+'">';}).join('')+'</datalist></div><div class="row"><label>Kategorie</label><select id="bk_kat">'+cats.map(function(c){return '<option>'+esc(c)+'</option>';}).join('')+'</select></div></div>';
-    var bkOpts=bkKeys.map(function(k){ var nm=bkName[k]; return '<option value="'+esc(k)+'"'+(k===cfg.bkr?' selected':'')+'>'+esc(k+(nm?' – '+nm:''))+'</option>'; }).join('');
+    var showKat=(cfg.schema!=="B"); // Business: keine Kategorie — Klassifizierung über das Sachkonto
     var coaMap=(D&&D.coaByBkr)||{}, hasCoa=!!(coaMap[cfg.bkr]&&coaMap[cfg.bkr].length);
-    var zweckRow='<div class="row"><label>Verwendungszweck <span class="muted" style="font-weight:400">(optional)</span></label><input id="bk_zweck" placeholder="z. B. Rechnung Nr. …"></div>';
-    if(hasCoa){ h+='<div class="two"><div class="row"><label>Buchungskreis</label><select id="bk_bkr">'+bkOpts+'</select></div><div class="row"><label>Sachkonto (Account)</label><select id="bk_sachkonto">'+sachkontoOptionsHTML(cfg.bkr)+'</select></div></div>'+zweckRow; }
-    else { h+='<div class="two"><div class="row"><label>Buchungskreis</label><select id="bk_bkr">'+bkOpts+'</select></div>'+zweckRow+'</div>'; }
+    var bkOpts=bkKeys.map(function(k){ var nm=bkName[k]; return '<option value="'+esc(k)+'"'+(k===cfg.bkr?' selected':'')+'>'+esc(k+(nm?' – '+nm:''))+'</option>'; }).join('');
+    var empfField='<div class="row"><label>Begünstiger</label><input id="bk_empf" list="bk_begs" placeholder="z. B. Firma / Person"><datalist id="bk_begs">'+begs.map(function(b){return '<option value="'+esc(b)+'">';}).join('')+'</datalist></div>';
+    var katField='<div class="row"><label>Kategorie</label><select id="bk_kat">'+cats.map(function(c){return '<option>'+esc(c)+'</option>';}).join('')+'</select></div>';
+    var bkrField='<div class="row"><label>Buchungskreis</label><select id="bk_bkr">'+bkOpts+'</select></div>';
+    var sachkontoField='<div class="row"><label>Sachkonto (Account)</label><select id="bk_sachkonto">'+sachkontoOptionsHTML(cfg.bkr)+'</select></div>';
+    var zweckField='<div class="row"><label>Verwendungszweck <span class="muted" style="font-weight:400">(optional)</span></label><input id="bk_zweck" placeholder="z. B. Rechnung Nr. …"></div>';
+    if(showKat){
+      h+='<div class="two">'+empfField+katField+'</div>';
+      h+=hasCoa ? ('<div class="two">'+bkrField+sachkontoField+'</div>'+zweckField) : ('<div class="two">'+bkrField+zweckField+'</div>');
+    } else {
+      h+='<div class="two">'+empfField+bkrField+'</div>';
+      h+=hasCoa ? ('<div class="two">'+sachkontoField+zweckField+'</div>') : zweckField;
+    }
     h+='<div style="margin-top:4px"><button class="editbtn on" data-buchen="'+esc(code)+'">Beleg buchen</button></div>';
     h+='</div></div></div>';
     return h;
@@ -1136,13 +1145,14 @@ var ERP_CFG={
     if(!window.ERP_append){ toast("Buchen braucht Anmeldung — bitte neu einloggen.",true); return; }
     function gv(id){ var e=document.getElementById(id); return e?String(e.value||"").trim():""; }
     var datum=gv('bk_datum'), empf=gv('bk_empf'), betrag=acDeNum(gv('bk_betrag')), kat=gv('bk_kat'), zweck=gv('bk_zweck'), bkr=gv('bk_bkr')||cfg.bkr;
-    var sachkonto=gv('bk_sachkonto'), coaChart=""; var _ske=document.getElementById('bk_sachkonto'); if(_ske&&_ske.options&&_ske.selectedIndex>=0){ var _o=_ske.options[_ske.selectedIndex]; if(_o)coaChart=_o.getAttribute('data-coa')||""; }
+    var sachkonto=gv('bk_sachkonto'), coaChart="", catCoa=""; var _ske=document.getElementById('bk_sachkonto'); if(_ske&&_ske.options&&_ske.selectedIndex>=0){ var _o=_ske.options[_ske.selectedIndex]; if(_o){ coaChart=_o.getAttribute('data-coa')||""; catCoa=_o.getAttribute('data-cat')||""; } }
+    var category=kat||catCoa; // Business ohne Kategorie-Feld: Kategorie = COA-Kategorie des Sachkontos
     if(!datum){ toast("Bitte Datum angeben.",true); return; }
     if(!empf){ toast("Bitte Begünstiger angeben.",true); return; }
     if(!betrag){ toast("Bitte gültigen Betrag angeben (z. B. -123,45).",true); return; }
     var jr=cfg.journal||"ACDOCA";
     var id=nextBelegId(cfg);
-    var row=journalRow(jr,{date:datum,doc:id,konto:cfg.konto||"",name:empf,ref:zweck,amount:betrag,currency:"EUR",category:kat||"Unklar",bkr:bkr,type:"Hauptbuchbeleg",account:sachkonto,coa:coaChart,quelle:cfg.konto||"",stream:cfg.stream||"",istplan:"Ist"});
+    var row=journalRow(jr,{date:datum,doc:id,konto:cfg.konto||"",name:empf,ref:zweck,amount:betrag,currency:"EUR",category:category,bkr:bkr,type:"Hauptbuchbeleg",account:sachkonto,coa:coaChart,quelle:cfg.konto||"",stream:cfg.stream||"",istplan:"Ist"});
     toast("Buche Beleg "+id+" …");
     window.ERP_append(jr,[row]).then(function(){
       if(window.__SHEETS){ var A=window.__SHEETS[jr]||(window.__SHEETS[jr]=[]); A.push(row); boot(parseSheets(window.__SHEETS),cfg.page||cfg.after); }

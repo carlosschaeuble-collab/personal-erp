@@ -1059,6 +1059,12 @@ var ERP_CFG={
     return h;
   }
   // Buchungs-Formular (wird oben im Segment-Cockpit und auf der eigenen Buchen-Seite verwendet)
+  function sachkontoOptionsHTML(bkr){
+    var list=((D&&D.coaByBkr)||{})[bkr]||[];
+    var o='<option value="">— kein Sachkonto</option>';
+    list.forEach(function(e){ o+='<option value="'+esc(e.account)+'" data-coa="'+esc(e.chart||"")+'">'+esc(e.account+(e.desc?(' · '+e.desc):''))+'</option>'; });
+    return o;
+  }
   function buchenFormHTML(code){
     var cfg=BUCHCFG[code]||BUCHCFG.CBUCH;
     var tx=AC.filter(function(x){ return matchSeg(x,cfg); });
@@ -1071,7 +1077,11 @@ var ERP_CFG={
     var h='<div class="panel"><div class="alv-bar"><h2>Hauptbuchbeleg buchen</h2><span class="sp"></span><span class="muted" style="font-size:12px">'+footer+'</span></div><div style="padding:16px 16px 18px"><div class="bform" style="max-width:none">';
     h+='<div class="two"><div class="row"><label>Datum</label><input type="date" id="bk_datum" value="'+today+'"></div><div class="row"><label>Betrag (€)</label><input id="bk_betrag" inputmode="text" placeholder="-123,45  ·  minus = Ausgabe"></div></div>';
     h+='<div class="two"><div class="row"><label>Begünstiger</label><input id="bk_empf" list="bk_begs" placeholder="z. B. Firma / Person"><datalist id="bk_begs">'+begs.map(function(b){return '<option value="'+esc(b)+'">';}).join('')+'</datalist></div><div class="row"><label>Kategorie</label><select id="bk_kat">'+cats.map(function(c){return '<option>'+esc(c)+'</option>';}).join('')+'</select></div></div>';
-    h+='<div class="two"><div class="row"><label>Buchungskreis</label><select id="bk_bkr">'+bkKeys.map(function(k){ var nm=bkName[k]; return '<option value="'+esc(k)+'"'+(k===cfg.bkr?' selected':'')+'>'+esc(k+(nm?' – '+nm:''))+'</option>'; }).join('')+'</select></div><div class="row"><label>Verwendungszweck <span class="muted" style="font-weight:400">(optional)</span></label><input id="bk_zweck" placeholder="z. B. Rechnung Nr. …"></div></div>';
+    var bkOpts=bkKeys.map(function(k){ var nm=bkName[k]; return '<option value="'+esc(k)+'"'+(k===cfg.bkr?' selected':'')+'>'+esc(k+(nm?' – '+nm:''))+'</option>'; }).join('');
+    var coaMap=(D&&D.coaByBkr)||{}, hasCoa=!!(coaMap[cfg.bkr]&&coaMap[cfg.bkr].length);
+    var zweckRow='<div class="row"><label>Verwendungszweck <span class="muted" style="font-weight:400">(optional)</span></label><input id="bk_zweck" placeholder="z. B. Rechnung Nr. …"></div>';
+    if(hasCoa){ h+='<div class="two"><div class="row"><label>Buchungskreis</label><select id="bk_bkr">'+bkOpts+'</select></div><div class="row"><label>Sachkonto (Account)</label><select id="bk_sachkonto">'+sachkontoOptionsHTML(cfg.bkr)+'</select></div></div>'+zweckRow; }
+    else { h+='<div class="two"><div class="row"><label>Buchungskreis</label><select id="bk_bkr">'+bkOpts+'</select></div>'+zweckRow+'</div>'; }
     h+='<div style="margin-top:4px"><button class="editbtn on" data-buchen="'+esc(code)+'">Beleg buchen</button></div>';
     h+='</div></div></div>';
     return h;
@@ -1099,7 +1109,8 @@ var ERP_CFG={
   function journalRow(jr, v){
     var S=(typeof window!=="undefined"&&window.__SHEETS)||{}, hdr=(S[jr]&&S[jr][0])||null;
     function cell(h){ h=String(h==null?"":h).trim();
-      if(/sachkonto/i.test(h)) return "";
+      if(/^coa$|chart\s*of\s*account/i.test(h)) return v.coa||"";
+      if(/sachkonto|^account$/i.test(h)) return v.account||"";
       if(/^konto$|^bank$/i.test(h)) return v.konto||"";
       if(/buchungsdatum|^datum$|^date$/i.test(h)) return v.date||"";
       if(/document\s*no|^id\b/i.test(h)) return v.doc||"";
@@ -1117,20 +1128,21 @@ var ERP_CFG={
       return "";
     }
     if(hdr&&hdr.length) return hdr.map(cell);
-    if(/-B$/i.test(jr)) return [v.date,v.doc,v.konto||"","",v.name,v.ref,(v.amount==null?"":v.amount),v.currency||"EUR",v.category,v.bkr,"","",""];
-    return [v.doc,v.date,v.konto||"",v.name,v.ref,(v.amount==null?"":v.amount),v.category,v.type||"",v.bkr,v.quelle||"",v.stream||"","",v.istplan||"Ist",""];
+    if(/-B$/i.test(jr)) return [v.date,v.doc,v.konto||"","",v.name,v.ref,(v.amount==null?"":v.amount),v.currency||"EUR",v.category,v.bkr,v.account||"",v.coa||"",""];
+    return [v.doc,v.date,v.konto||"",v.name,v.ref,(v.amount==null?"":v.amount),v.category,v.type||"",v.bkr,v.quelle||"",v.stream||"",v.account||"",v.istplan||"Ist",""];
   }
   function doBuchen(code){
     var cfg=BUCHCFG[code]||BUCHCFG.CBUCH;
     if(!window.ERP_append){ toast("Buchen braucht Anmeldung — bitte neu einloggen.",true); return; }
     function gv(id){ var e=document.getElementById(id); return e?String(e.value||"").trim():""; }
     var datum=gv('bk_datum'), empf=gv('bk_empf'), betrag=acDeNum(gv('bk_betrag')), kat=gv('bk_kat'), zweck=gv('bk_zweck'), bkr=gv('bk_bkr')||cfg.bkr;
+    var sachkonto=gv('bk_sachkonto'), coaChart=""; var _ske=document.getElementById('bk_sachkonto'); if(_ske&&_ske.options&&_ske.selectedIndex>=0){ var _o=_ske.options[_ske.selectedIndex]; if(_o)coaChart=_o.getAttribute('data-coa')||""; }
     if(!datum){ toast("Bitte Datum angeben.",true); return; }
     if(!empf){ toast("Bitte Begünstiger angeben.",true); return; }
     if(!betrag){ toast("Bitte gültigen Betrag angeben (z. B. -123,45).",true); return; }
     var jr=cfg.journal||"ACDOCA";
     var id=nextBelegId(cfg);
-    var row=journalRow(jr,{date:datum,doc:id,konto:cfg.konto||"",name:empf,ref:zweck,amount:betrag,currency:"EUR",category:kat||"Unklar",bkr:bkr,type:"Hauptbuchbeleg",quelle:cfg.konto||"",stream:cfg.stream||"",istplan:"Ist"});
+    var row=journalRow(jr,{date:datum,doc:id,konto:cfg.konto||"",name:empf,ref:zweck,amount:betrag,currency:"EUR",category:kat||"Unklar",bkr:bkr,type:"Hauptbuchbeleg",account:sachkonto,coa:coaChart,quelle:cfg.konto||"",stream:cfg.stream||"",istplan:"Ist"});
     toast("Buche Beleg "+id+" …");
     window.ERP_append(jr,[row]).then(function(){
       if(window.__SHEETS){ var A=window.__SHEETS[jr]||(window.__SHEETS[jr]=[]); A.push(row); boot(parseSheets(window.__SHEETS),cfg.page||cfg.after); }
@@ -1668,7 +1680,7 @@ var ERP_CFG={
       if(tb) Array.prototype.forEach.call(tb.rows,function(tr){ tr.style.display = tr.textContent.toLowerCase().indexOf(q)>=0 ? "" : "none"; });
     }
   });
-  document.getElementById("page").addEventListener("change",function(e){ if(e.target.id==="acfile"){ acHandleFile(e.target); return; } if(e.target.id==="acmonth"){ acFilter.month=e.target.value; render(); return; } if(e.target.id==="mkyear"){ mkFilter.year=e.target.value; mkFilter.month=""; render(); return; } if(e.target.id==="mkmonth"){ mkFilter.month=e.target.value; render(); return; } if(e.target.id==="bk_empf"){ var m=window.__BK_BEGMAP||{}, k=m[String(e.target.value||"").trim()]; if(k){ var ks=document.getElementById('bk_kat'); if(ks)ks.value=k; } return; } if(e.target.classList.contains("cell-edit")) saveCell(e.target); });
+  document.getElementById("page").addEventListener("change",function(e){ if(e.target.id==="acfile"){ acHandleFile(e.target); return; } if(e.target.id==="acmonth"){ acFilter.month=e.target.value; render(); return; } if(e.target.id==="mkyear"){ mkFilter.year=e.target.value; mkFilter.month=""; render(); return; } if(e.target.id==="mkmonth"){ mkFilter.month=e.target.value; render(); return; } if(e.target.id==="bk_empf"){ var m=window.__BK_BEGMAP||{}, k=m[String(e.target.value||"").trim()]; if(k){ var ks=document.getElementById('bk_kat'); if(ks)ks.value=k; } return; } if(e.target.id==="bk_bkr"){ var sk=document.getElementById('bk_sachkonto'); if(sk)sk.innerHTML=sachkontoOptionsHTML(String(e.target.value||"").trim()); return; } if(e.target.classList.contains("cell-edit")) saveCell(e.target); });
   document.getElementById("page").addEventListener("keydown",function(e){ if(e.target.classList.contains("cell-edit")&&e.key==="Enter"){ e.preventDefault(); e.target.blur(); } });
   // Jedem Bankkonto (Reiter F) eine stabile ID geben; fehlende werden ins Google-Sheet geschrieben (Spalte A).
   function newId(){ return (Date.now().toString(36)+Math.random().toString(36).slice(2,7)).slice(0,13); }
@@ -1893,6 +1905,19 @@ function parseSheets(S){
       compList.push(comp[k]);
     }
   })();
+  // COA = Kontenplan (Sachkonten je Buchungskreis) für die Buchen-Maske
+  var coaByBkr={};
+  (function(){
+    var A=S['COA']||[]; if(!A.length)return;
+    var hr=-1; for(var r0=0;r0<Math.min(A.length,10);r0++){ if(/chart of account/i.test(String((A[r0]||[])[0]||""))){hr=r0;break;} } if(hr<0)return;
+    var H=(A[hr]||[]).map(function(x){return String(x==null?"":x);});
+    function ci(re){ for(var i=0;i<H.length;i++){ if(re.test(H[i]))return i; } return -1; }
+    var iCh=ci(/chart of account/i), iAcc=ci(/^account$/i), iDesc=ci(/description|beschreib/i), iCat=ci(/category/i), iBkr=ci(/company\s*code|buchungskreis/i);
+    if(iAcc<0)iAcc=1; if(iBkr<0)iBkr=5;
+    for(var r2=hr+1;r2<A.length;r2++){ var row=A[r2]||[]; var acc=normkey(row[iAcc]); if(!acc)continue; var bk=normkey(row[iBkr]); if(!bk)continue;
+      (coaByBkr[bk]=coaByBkr[bk]||[]).push({account:acc,desc:iDesc>=0?String(row[iDesc]||"").trim():"",chart:iCh>=0?String(row[iCh]||"").trim():"",cat:iCat>=0?String(row[iCat]||"").trim():""});
+    }
+  })();
   // Tabellenname-Resolver: echte Tabelle direkt; ACDOCA/ARAP bekommen Welt-Suffix; Platzhalter über die Seite; sonst leer
   function tabExists(t){ return !!(t && S[t] && S[t].length); }
   function resolveTable(raw, seite, world){
@@ -1956,7 +1981,7 @@ function parseSheets(S){
       views[tn].bkrcol=bkrcol;
     });
   })();
-  return {nav:nav,navPrivate:SP.nav,navBusiness:SB.nav,comp:comp,compList:compList,views:views,kpis:kpis,bkr:bkr,bkrList:bkrDefs,acdoca:acdoca,acats:Object.keys(acatsCount),cats:cats,brand:brand2,sphere:_sphMap};
+  return {nav:nav,navPrivate:SP.nav,navBusiness:SB.nav,comp:comp,compList:compList,coaByBkr:coaByBkr,views:views,kpis:kpis,bkr:bkr,bkrList:bkrDefs,acdoca:acdoca,acats:Object.keys(acatsCount),cats:cats,brand:brand2,sphere:_sphMap};
 }
 </script>
 <script>

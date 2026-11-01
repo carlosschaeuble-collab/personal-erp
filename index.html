@@ -433,7 +433,7 @@ var ERP_CFG={
   }
   tabsEl.addEventListener("click",function(e){ var g=e.target.closest("[data-go]"); if(g) go(g.dataset.go); });
   (function(){ var seg=document.getElementById('sphereSeg'); if(seg)seg.addEventListener('click',function(e){ var b=e.target.closest('[data-sph]'); if(b)setSphere(b.dataset.sph); }); })();
-  var cur=null, curObj=null, sortState={}, editState={}, AC=[], ACATS=[], ACDOCA_CATLIST=[], ACDOCA_USERRULES=[], acFilter={month:"",kat:""}, mkFilter={}, segYear=null, auswScope="";
+  var cur=null, curObj=null, sortState={}, editState={}, AC=[], ACATS=[], ACDOCA_CATLIST=[], ACDOCA_USERRULES=[], acFilter={month:"",kat:""}, mkFilter={}, segYear=null, auswScope="", acUploadCtx=null;
   var sphere=(function(){ try{ var s=localStorage.getItem('erp_sphere'); return (s==='business'||s==='gesamt')?s:'privat'; }catch(e){ return 'privat'; } })();
   var navPrivate=[], navBusiness=[], navGesamt=[];
   function activeNav(){ return sphere==='business'?navBusiness:(sphere==='gesamt'?navGesamt:navPrivate); }
@@ -473,7 +473,8 @@ var ERP_CFG={
     CBUCH:{page:"C",stream:"Detmold",after:"CBUCH",konto:"Hauptbuch Detmold",bkr:"1020",journal:"ACDOCA-P",schema:"P",prefix:"FW",pad:4},
     HBUCH:{page:"H",after:"HBUCH",bkr:"2020",journal:"ACDOCA-B",schema:"B",prefix:"MAR",pad:5},
     IBUCH:{page:"I",after:"IBUCH",bkr:"2030",journal:"ACDOCA-B",schema:"B",prefix:"PRV",pad:5},
-    JBUCH:{page:"J",after:"JBUCH",bkr:"2040",journal:"ACDOCA-B",schema:"B",prefix:"IND",pad:5}
+    JBUCH:{page:"J",after:"JBUCH",bkr:"2040",journal:"ACDOCA-B",schema:"B",prefix:"IND",pad:5},
+    DUPL:{page:"D",bkr:"1010",journal:"ACDOCA-P",schema:"P",konto:"N26 · Gemeinschaftskonto",prefix:"PB",pad:4,upload:true}
   };
   var PAGE2BUCH={C:"CBUCH",H:"HBUCH",I:"IBUCH",J:"JBUCH"};
   function toast(msg,err){ var t=document.getElementById("toast"); if(!t)return; t.textContent=msg; t.className="toast show"+(err?" err":""); clearTimeout(toast._t); toast._t=setTimeout(function(){ t.className="toast"; }, err?6000:1600); }
@@ -1164,26 +1165,56 @@ var ERP_CFG={
     h+='</div>';
     return h;
   }
-  // ===== Detmold = Launchpad mit Apps =====
+  // ===== Launchpad (Apps) für Detmold & Paderborn =====
   var APPICON={
     buch:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>',
-    ausw:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-8M3 20h18"/></svg>'
+    ausw:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-8M3 20h18"/></svg>',
+    upload:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M8 7l4-4 4 4"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>'
   };
-  function detmoldHubHTML(){
-    var cfg=BUCHCFG.CBUCH, page=cfg.page;
-    var lbl=(byCode[page]&&byCode[page].label)||SHORT[page]||'Detmold';
-    var sub=(byCode[page]&&byCode[page].desc)||"";
-    var tx=AC.filter(function(x){ return matchSeg(x,cfg); });
-    var yr=""; tx.forEach(function(x){ var m=String(x.datum||"").match(/(\d{4})/); if(m&&m[1]>yr)yr=m[1]; });
-    var yrAus=0; tx.forEach(function(x){ if(String(x.datum||"").indexOf(yr)===0 && x.betrag<0) yrAus+=x.betrag; });
-    var apps=[
-      {code:'CBUCH',ic:APPICON.buch,t:'Hauptbuchbelege buchen',p:'Kosten erfassen und alle Belege ansehen',kpi:tx.length+' Belege'},
-      {code:'CAUSW',ic:APPICON.ausw,t:'Auswertungen',p:'Jahreskosten, Kategorien & Empfänger',kpi:(yr?('Kosten '+yr+': '+eur(yrAus,0)):'—')}
-    ];
+  function appHubHTML(pageCode, apps){
+    var lbl=(byCode[pageCode]&&byCode[pageCode].label)||SHORT[pageCode]||pageCode;
+    var sub=(byCode[pageCode]&&byCode[pageCode].desc)||"";
     var h='<div class="page-head"><div><h1>'+esc(lbl)+'</h1>'+(sub?'<div class="sub">'+esc(sub)+'</div>':'')+'</div></div>';
     h+='<div class="applaunch">';
     apps.forEach(function(a){ h+='<div class="apptile" data-go="'+esc(a.code)+'"><div class="ic">'+a.ic+'</div><div class="at"><h3>'+esc(a.t)+'</h3><p>'+esc(a.p)+'</p></div><div class="kpi">'+esc(a.kpi)+'</div></div>'; });
     h+='</div>';
+    return h;
+  }
+  function segKpis(cfg){
+    var tx=AC.filter(function(x){ return matchSeg(x,cfg); });
+    var yr=""; tx.forEach(function(x){ var m=String(x.datum||"").match(/(\d{4})/); if(m&&m[1]>yr)yr=m[1]; });
+    var yrAus=0; tx.forEach(function(x){ if(String(x.datum||"").indexOf(yr)===0 && x.betrag<0) yrAus+=x.betrag; });
+    return {n:tx.length, yr:yr, yrAus:yrAus};
+  }
+  function detmoldHubHTML(){
+    var k=segKpis(BUCHCFG.CBUCH);
+    return appHubHTML('C',[
+      {code:'CBUCH',ic:APPICON.buch,t:'Hauptbuchbelege buchen',p:'Kosten erfassen und alle Belege ansehen',kpi:k.n+' Belege'},
+      {code:'CAUSW',ic:APPICON.ausw,t:'Auswertungen',p:'Jahreskosten, Kategorien & Empfänger',kpi:(k.yr?('Kosten '+k.yr+': '+eur(k.yrAus,0)):'—')}
+    ]);
+  }
+  function paderbornHubHTML(){
+    var k=segKpis(BUCHCFG.DUPL);
+    return appHubHTML('D',[
+      {code:'DUPL',ic:APPICON.upload,t:'Kontoauszüge hochladen',p:'N26-Auszug importieren (PDF/CSV) → ACDOCA-P',kpi:k.n+' Buchungen'},
+      {code:'DAUSW',ic:APPICON.ausw,t:'Auswertungen',p:'Jahreskosten, Kategorien & Empfänger',kpi:(k.yr?('Kosten '+k.yr+': '+eur(k.yrAus,0)):'—')}
+    ]);
+  }
+  // Paderborn-App: N26-Kontoauszüge hochladen (+ importierte Buchungen darunter)
+  function uploadAppHTML(cfgCode){
+    var cfg=BUCHCFG[cfgCode]||BUCHCFG.DUPL, page=cfg.page;
+    var segLbl=(byCode[page]&&byCode[page].label)||SHORT[page]||page;
+    acUploadCtx={label:cfg.konto||segLbl, bkr:cfg.bkr, journal:cfg.journal, back:page}; // Kontext für den Import
+    var tx=AC.filter(function(x){ return matchSeg(x,cfg); });
+    var h='<div class="crumb" data-go="'+esc(page)+'" style="cursor:pointer">‹ '+esc(segLbl)+'</div><div class="page-head"><h1>Kontoauszüge hochladen</h1></div>';
+    h+='<div class="panel"><div class="alv-bar"><h2>N26-Kontoauszug importieren</h2><span class="sp"></span><span class="muted" style="font-size:12px">'+esc(cfg.journal)+' · Buchungskreis '+esc(cfg.bkr)+'</span></div><div style="padding:16px 16px 18px"><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><button class="editbtn on" data-acupload="d">⬆︎ Kontoauszug hochladen</button><span class="muted" style="font-size:12px">PDF (N26) oder CSV · wird geprüft, kategorisiert und ins Journal übernommen</span><input type="file" id="acfile" accept=".csv,.pdf" hidden></div></div></div>';
+    var saldo=0; tx.forEach(function(x){ saldo+=x.betrag; });
+    var sorted=tx.slice().sort(function(a,b){ return a.datum<b.datum?1:a.datum>b.datum?-1:0; });
+    var search='<span class="mini-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input class="grid-filter" placeholder="Filtern…" aria-label="Filtern"></span>';
+    h+='<div class="panel"><div class="alv-bar"><h2>Importierte Buchungen</h2><span class="count">'+tx.length+'</span><span class="sp"></span>'+search+'</div><div class="alv-wrap" style="max-height:520px"><table class="alv"><thead><tr><th>Datum</th><th>Empfänger</th><th>Kategorie</th><th>Typ</th><th class="num">Betrag</th></tr></thead><tbody>';
+    if(!tx.length) h+='<tr><td colspan="5"><div class="empty">Noch keine Buchungen. Lade oben deinen ersten N26-Auszug hoch.</div></td></tr>';
+    sorted.forEach(function(x){ var neg=x.betrag<0; h+='<tr><td>'+esc(String(x.datum||"").slice(0,10))+'</td><td class="name">'+esc(x.empf)+'</td><td>'+esc(x.kat||"")+'</td><td class="muted">'+esc(x.typ||"")+'</td><td class="num '+(neg?'neg':'pos')+'">'+eur(x.betrag,2)+'</td></tr>'; });
+    h+='</tbody><tfoot><tr><td colspan="4">Saldo · '+tx.length+' Buchungen</td><td class="num '+(saldo<0?'neg':'pos')+'">'+eur(saldo,2)+'</td></tr></tfoot></table></div></div>';
     return h;
   }
   // App 1: Buchen + alle Belege darunter
@@ -1498,12 +1529,13 @@ var ERP_CFG={
   }
   function acHandleFile(inp){
     var file=inp.files&&inp.files[0]; if(!file){ return; }
-    var oi=curObj?curObj.oi:null; if(oi==null||!V['F']){ toast("Kein Konto gewählt.",true); return; }
-    var row=V['F'].rows[oi], label=acctLabel(row), bkr=String(row[4]||"");
+    var ctx=acUploadCtx, label, bkr, oi=null;
+    if(ctx){ label=ctx.label; bkr=String(ctx.bkr||""); }
+    else { oi=curObj?curObj.oi:null; if(oi==null||!V['F']){ toast("Kein Konto gewählt.",true); return; } var row=V['F'].rows[oi]; label=acctLabel(row); bkr=String(row[4]||""); }
     var learned={}; AC.forEach(function(t){ if(t.empf&&t.kat&&t.kat!=="Unklar") learned[acNorm(t.empf)]=t.kat; });
     var nm=(file.name||"").toLowerCase(), quelle=(file.name||"").replace(/\.(csv|pdf)$/i,"");
     toast("Lese "+file.name+" …");
-    var done=function(tx){ tx.forEach(function(t){t.quelle=quelle;}); if(!tx.length){ toast("Keine Buchungen erkannt.",true); return; } acShowReview(tx,label,oi); };
+    var done=function(tx){ tx.forEach(function(t){t.quelle=quelle;}); if(!tx.length){ toast("Keine Buchungen erkannt.",true); return; } acShowReview(tx,label,oi,ctx); };
     if(/\.pdf$/.test(nm)){ file.arrayBuffer().then(function(b){ return pdfToText(b); }).then(function(txt){ done(acParseN26(txt,label,bkr,learned)); }).catch(function(e){ toast("✗ PDF-Fehler: "+(e.message||e),true); }); }
     else { file.arrayBuffer().then(function(buf){
         var u8=new Uint8Array(buf), txt;
@@ -1514,7 +1546,7 @@ var ERP_CFG={
       }).catch(function(e){ toast("✗ CSV-Fehler: "+(e.message||e),true); }); }
     inp.value="";
   }
-  function acShowReview(tx,label,oi){
+  function acShowReview(tx,label,oi,ctx){
     var ex={}; AC.forEach(function(t){ var k=acDedupKey(t); ex[k]=(ex[k]||0)+1; });
     var seen={}; tx.forEach(function(t){ var k=acDedupKey(t); seen[k]=(seen[k]||0)+1; t._dup=(seen[k]<=(ex[k]||0)); });
     var fresh=tx.filter(function(t){return !t._dup;}), dupN=tx.length-fresh.length;
@@ -1534,16 +1566,17 @@ var ERP_CFG={
     }
     h+='</div>'; m.innerHTML=h; document.body.appendChild(m);
     m.addEventListener("change",function(e){ if(e.target.classList.contains("accat")){ fresh[+e.target.dataset.i].kat=e.target.value; e.target.closest("tr").classList.remove("acunk"); } });
-    m.addEventListener("click",function(e){ if(e.target.closest("[data-acclose]")){ m.remove(); return; } if(e.target.closest("[data-acimport]")){ m.remove(); acDoImport(fresh,oi); } });
+    m.addEventListener("click",function(e){ if(e.target.closest("[data-acclose]")){ m.remove(); return; } if(e.target.closest("[data-acimport]")){ m.remove(); acDoImport(fresh,oi,ctx); } });
   }
-  function acDoImport(fresh,oi){
+  function acDoImport(fresh,oi,ctx){
     if(!fresh.length){ return; }
     if(!window.ERP_append){ toast("Import braucht Anmeldung — bitte neu einloggen.",true); return; }
+    var jr=(ctx&&ctx.journal)||"ACDOCA";
     function uid(){ return "tx"+Date.now().toString(36)+Math.floor(Math.random()*1e4).toString(36); }
     var rows=fresh.map(function(t){ return [uid(),t.datum,t.konto,t.empf,t.zweck||"",t.betrag,t.kat,t.typ,t.bkr||"",t.quelle||"","","","Ist",""]; });
-    toast("Importiere "+rows.length+" Buchungen ins ACDOCA-Journal …");
-    window.ERP_append("ACDOCA",rows).then(function(){
-      if(window.__SHEETS){ var A=window.__SHEETS['ACDOCA']||(window.__SHEETS['ACDOCA']=[]); rows.forEach(function(r){A.push(r);}); boot(parseSheets(window.__SHEETS),'F'); goObj('F',oi); }
+    toast("Importiere "+rows.length+" Buchungen in "+jr+" …");
+    window.ERP_append(jr,rows).then(function(){
+      if(window.__SHEETS){ var A=window.__SHEETS[jr]||(window.__SHEETS[jr]=[]); rows.forEach(function(r){A.push(r);}); var back=(ctx&&ctx.back)||'F'; boot(parseSheets(window.__SHEETS),back); if(!ctx) goObj('F',oi); }
       toast("✓ "+rows.length+" Buchungen importiert.");
     }).catch(function(e){ toast("✗ Import-Fehler: "+(e.message||e),true); });
   }
@@ -1576,9 +1609,13 @@ var ERP_CFG={
     if(curObj){ p.innerHTML=objectHTML(curObj.code,curObj.oi); return; }
     if(code==="A"){ p.innerHTML=overviewHTML(); return; }
     var node=byCode[code]||{};
+    acUploadCtx=null;                                                             // Upload-Kontext nur auf der Upload-Seite setzen
     if(code==="C"){ p.innerHTML=detmoldHubHTML(); return; }                       // Detmold-Launchpad (Apps)
     if(code==="CBUCH"){ p.innerHTML=buchenAppHTML("CBUCH"); return; }              // Buchen + alle Belege
     if(code==="CAUSW"){ p.innerHTML=auswertungHTML("CBUCH"); return; }             // Auswertungen (Jahr/Monat, Kategorie & Empfänger)
+    if(code==="D"){ p.innerHTML=paderbornHubHTML(); return; }                      // Paderborn-Launchpad (Apps)
+    if(code==="DUPL"){ p.innerHTML=uploadAppHTML("DUPL"); return; }                // N26-Kontoauszüge hochladen
+    if(code==="DAUSW"){ p.innerHTML=auswertungHTML("DUPL"); return; }              // Auswertungen Paderborn
     if(PAGE2BUCH[code]){ p.innerHTML=segmentCockpitHTML(PAGE2BUCH[code]); return; } // Business-Segmente (Marbella / Private / Industrial)
     if(/BUCH$/.test(code)){ p.innerHTML=buchenHTML(code); return; }               // Hauptbuchbelege-Buchungsmaske (Business)
     if(node.children&&node.children.length){ p.innerHTML=groupHTML(code); return; }
@@ -1869,6 +1906,13 @@ function parseSheets(S){
     if(c){ c.children=[
       {code:'CBUCH',label:'Hauptbuchbelege buchen',seite:'Detmold',desc:'Kosten erfassen & alle Belege',world:'privat',group:'Detmold'},
       {code:'CAUSW',label:'Auswertungen',seite:'Detmold',desc:'Jahreskosten, Kategorien & Empfänger',world:'privat',group:'Detmold'}
+    ]; }
+  })();
+  // Paderborn (D) = Launchpad: N26-Kontoauszüge hochladen + Auswertungen (Buchungskreis 1010)
+  (function(){ var d=null; for(var i=0;i<SP.nav.length;i++){ if(SP.nav[i].code==='D'){ d=SP.nav[i]; break; } }
+    if(d){ d.children=[
+      {code:'DUPL',label:'Kontoauszüge hochladen',seite:'Paderborn',desc:'N26-Auszug importieren',world:'privat',group:'Paderborn'},
+      {code:'DAUSW',label:'Auswertungen',seite:'Paderborn',desc:'Jahreskosten, Kategorien & Empfänger',world:'privat',group:'Paderborn'}
     ]; }
   })();
   // „Hauptbuchbelege buchen" in die drei Business-Vermietungen (H/I/J) einhängen — bucht in ACDOCA-B mit Buchungskreis 2020/2030/2040

@@ -1216,11 +1216,13 @@ var ERP_CFG={
     var selYear=(segYear&&years[segYear])?segYear:(yearList[0]||"");
     var yearTx=all.filter(function(x){ return yearOf(x)===selYear; });
     if(yearList.length>1){ h+='<div style="margin:2px 0 14px"><span class="seg">'+yearList.map(function(y){ return '<button class="seg-b'+(y===selYear?' on':'')+'" data-segyear="'+esc(y)+'">'+esc(y)+'</button>'; }).join('')+'</span></div>'; }
-    var aus=0,ein=0; yearTx.forEach(function(x){ if(x.betrag<0)aus+=x.betrag; else ein+=x.betrag; }); var saldo=aus+ein;
+    var aus=0,ein=0,monthsSet={}; yearTx.forEach(function(x){ if(x.betrag<0)aus+=x.betrag; else ein+=x.betrag; var mm=String(x.datum||"").slice(0,7); if(/^\d{4}-\d{2}$/.test(mm))monthsSet[mm]=1; });
+    var saldo=aus+ein, nMonths=Math.max(1,Object.keys(monthsSet).length), avg=aus/nMonths;
     h+='<section class="tiles">'
       +tile("Jahreskosten "+selYear,eur(aus,0),esc(segLbl),"big")
       +tile("Einnahmen "+selYear,"+"+eur(ein,0),"Gutschriften / Mieten")
       +'<div class="tile"><p class="k">Saldo '+esc(selYear)+'</p><div class="v" style="color:'+(saldo>=0?'var(--pos)':'var(--neg)')+'">'+(saldo>=0?"+":"")+eur(saldo,0)+'</div><div class="d">Einnahmen − Kosten</div></div>'
+      +tile("Ø Kosten / Monat",eur(avg,0),nMonths+" Monat"+(nMonths===1?"":"e")+" mit Buchungen")
       +'</section>';
     // Monatsbasis — Kosten je Monat, klickbar als Filter
     var byM={}; yearTx.forEach(function(x){ var ym=ymOf(x); if(!ym)return; if(!byM[ym])byM[ym]={aus:0,n:0}; if(x.betrag<0)byM[ym].aus+=x.betrag; byM[ym].n++; });

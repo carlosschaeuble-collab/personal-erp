@@ -477,6 +477,14 @@ var ERP_CFG={
     DUPL:{page:"D",bkr:"1010",journal:"ACDOCA-P",schema:"P",konto:"N26 · Gemeinschaftskonto",prefix:"PB",pad:4,upload:true}
   };
   var PAGE2BUCH={C:"CBUCH",H:"HBUCH",I:"IBUCH",J:"JBUCH"};
+  var PAGE2GUV={H:"HGUV",I:"IGUV",J:"JGUV"}, GUV2BUCH={HGUV:"HBUCH",IGUV:"IBUCH",JGUV:"JBUCH"};
+  // „Konto · Beschreibung" aus COA; ohne Konto → Sammelposten
+  function sachkontoLabel(bkr, account){
+    var acc=String(account==null?"":account).trim(); if(!acc) return "— ohne Sachkonto";
+    var list=((D&&D.coaByBkr)||{})[String(bkr==null?"":bkr).replace(/\.0+$/,"").trim()]||[], e=null;
+    for(var i=0;i<list.length;i++){ if(String(list[i].account)===acc){ e=list[i]; break; } }
+    return acc+(e&&e.desc?(' · '+e.desc):'');
+  }
   function toast(msg,err){ var t=document.getElementById("toast"); if(!t)return; t.textContent=msg; t.className="toast show"+(err?" err":""); clearTimeout(toast._t); toast._t=setTimeout(function(){ t.className="toast"; }, err?6000:1600); }
   function saveCell(inp){
     if(!window.ERP_write){ toast("Speichern nicht verfügbar — bitte neu anmelden.",true); return; }
@@ -1173,8 +1181,9 @@ var ERP_CFG={
     var sub=(byCode[page]&&byCode[page].desc)||"";
     var all=AC.filter(function(x){ return matchSeg(x,cfg); });
     function yearOf(x){ var m=String(x.datum||"").match(/(\d{4})/); return m?m[1]:""; }
-    // Kopf
-    var h='<div class="page-head"><div><h1>'+esc(lbl)+'</h1>'+(sub?'<div class="sub">'+esc(sub)+'</div>':'')+'</div></div>';
+    // Kopf (+ GuV-App-Button im Business-Bereich)
+    var isBiz=(cfg.schema==="B"), guvCode=PAGE2GUV[page];
+    var h='<div class="page-head"><div><h1>'+esc(lbl)+'</h1>'+(sub?'<div class="sub">'+esc(sub)+'</div>':'')+'</div>'+((isBiz&&guvCode)?'<span style="flex:1"></span><button class="editbtn" data-go="'+esc(guvCode)+'">GuV (Jahresübersicht)</button>':'')+'</div>';
     // 1) Oben: Hauptbuchbeleg direkt buchen
     h+=buchenFormHTML(buchCode);
     if(!all.length){ h+='<div class="note-card"><span class="vp">'+esc(lbl)+'</span><p>Noch keine Belege. Trag oben den ersten ein — er landet im Journal <b>'+esc(cfg.journal)+'</b>'+(cfg.stream?(' (Stream '+esc(cfg.stream)+')'):(' (Buchungskreis '+esc(cfg.bkr)+')'))+' und erscheint dann hier.</p></div>'; return h; }
@@ -1199,12 +1208,45 @@ var ERP_CFG={
     h+='<div class="panel"><div class="alv-bar"><h2>Letzte Einträge</h2><span class="count">'+tx.length+'</span><span class="sp"></span><span class="muted" style="font-size:12px">'+esc(selYear)+'</span></div><div class="alv-wrap" style="max-height:440px"><table class="alv"><thead><tr><th>Datum</th><th>Beleg</th><th>Begünstiger</th><th class="num">Betrag</th></tr></thead><tbody>';
     sorted.forEach(function(x){ var neg=x.betrag<0; h+='<tr><td>'+esc(String(x.datum||"").slice(0,10))+'</td><td class="idtag">'+esc(x.id)+'</td><td class="name">'+esc(x.empf)+'</td><td class="num '+(neg?'neg':'pos')+'">'+eur(x.betrag,2)+'</td></tr>'; });
     h+='</tbody><tfoot><tr><td colspan="3">Summe · '+tx.length+' Belege</td><td class="num '+(saldo<0?'neg':'pos')+'">'+eur(saldo,2)+'</td></tr></tfoot></table></div></div>';
-    var byK={}; tx.forEach(function(x){ var k=x.kat||"—"; if(!byK[k])byK[k]={sum:0,n:0}; byK[k].sum+=x.betrag; byK[k].n++; });
+    var byK={}; tx.forEach(function(x){ var k=isBiz?sachkontoLabel(x.bkr,x.account):(x.kat||"—"); if(!byK[k])byK[k]={sum:0,n:0}; byK[k].sum+=x.betrag; byK[k].n++; });
     var keys=Object.keys(byK).sort(function(a,b){return byK[a].sum-byK[b].sum;}); var mx=1; keys.forEach(function(k){ mx=Math.max(mx,Math.abs(byK[k].sum)); });
-    h+='<div class="panel"><div class="alv-bar"><h2>Nach Kategorie</h2><span class="count">'+keys.length+'</span><span class="sp"></span><span class="muted" style="font-size:12px">'+esc(selYear)+'</span></div><div style="padding:14px 16px 16px">';
+    h+='<div class="panel"><div class="alv-bar"><h2>'+(isBiz?'Nach Sachkonto':'Nach Kategorie')+'</h2><span class="count">'+keys.length+'</span><span class="sp"></span><span class="muted" style="font-size:12px">'+esc(selYear)+'</span></div><div style="padding:14px 16px 16px">';
     keys.forEach(function(k){ var s=byK[k].sum, w=Math.max(2,Math.abs(s)/mx*100), neg=s<0; h+='<div class="bar-row"><div class="bl pname" title="'+esc(k)+'"><span class="pnm">'+esc(k)+'</span></div><div class="bt"><div class="bf" style="width:'+w.toFixed(1)+'%;background:'+(neg?'var(--accent)':'var(--pos)')+'"></div></div><div class="bv '+(neg?'':'pos')+'">'+eur(s,0)+' <span class="muted" style="font-weight:400">· '+byK[k].n+'</span></div></div>'; });
     h+='</div></div>';
     h+='</div>';
+    return h;
+  }
+  // GuV — Jahresübersicht (Gewinn- und Verlustrechnung), gegliedert nach Sachkonto
+  function guvAppHTML(buchCode){
+    var cfg=BUCHCFG[buchCode]||BUCHCFG.HBUCH, page=cfg.page;
+    var segLbl=(byCode[page]&&byCode[page].label)||SHORT[page]||page;
+    var all=AC.filter(function(x){ return matchSeg(x,cfg); });
+    function yearOf(x){ var m=String(x.datum||"").match(/(\d{4})/); return m?m[1]:""; }
+    var h='<div class="crumb" data-go="'+esc(page)+'" style="cursor:pointer">‹ '+esc(segLbl)+'</div><div class="page-head"><h1>GuV · Jahresübersicht</h1><div class="sub">'+esc(segLbl)+'</div></div>';
+    if(!all.length){ h+='<div class="note-card"><p>Noch keine Buchungen.</p></div>'; return h; }
+    var years={}; all.forEach(function(x){ var y=yearOf(x); if(y)years[y]=1; });
+    var yearList=Object.keys(years).sort().reverse();
+    var selYear=(segYear&&years[segYear])?segYear:(yearList[0]||"");
+    var tx=all.filter(function(x){ return yearOf(x)===selYear; });
+    if(yearList.length>1){ h+='<div style="margin:2px 0 14px"><span class="seg">'+yearList.map(function(y){ return '<button class="seg-b'+(y===selYear?' on':'')+'" data-segyear="'+esc(y)+'">'+esc(y)+'</button>'; }).join('')+'</span></div>'; }
+    var ertr={}, aufw={}, eSum=0, aSum=0;
+    tx.forEach(function(x){ var key=sachkontoLabel(x.bkr,x.account), b=x.betrag||0; if(b>=0){ ertr[key]=(ertr[key]||0)+b; eSum+=b; } else { aufw[key]=(aufw[key]||0)+b; aSum+=b; } });
+    var ergebnis=eSum+aSum;
+    h+='<section class="tiles">'
+      +tile("Erträge "+selYear,"+"+eur(eSum,0),esc(segLbl)+" · Einnahmen","big")
+      +tile("Aufwendungen "+selYear,eur(aSum,0),"Kosten & Steuern")
+      +'<div class="tile"><p class="k">Jahresergebnis '+esc(selYear)+'</p><div class="v" style="color:'+(ergebnis>=0?'var(--pos)':'var(--neg)')+'">'+(ergebnis>=0?"+":"")+eur(ergebnis,0)+'</div><div class="d">'+(ergebnis>=0?'Gewinn':'Verlust')+'</div></div>'
+      +'</section>';
+    function sect(title,obj,sum,pos){ var ks=Object.keys(obj).sort(function(a,b){return Math.abs(obj[b])-Math.abs(obj[a]);});
+      var s='<tr><td colspan="2" style="font-weight:600;background:var(--alv-head)">'+esc(title)+'</td></tr>';
+      if(!ks.length) s+='<tr><td class="muted" style="padding-left:20px">—</td><td class="num"></td></tr>';
+      ks.forEach(function(k){ s+='<tr><td style="padding-left:20px">'+esc(k)+'</td><td class="num '+(pos?'pos':'neg')+'">'+eur(obj[k],2)+'</td></tr>'; });
+      s+='<tr style="font-weight:600"><td>Summe '+esc(title)+'</td><td class="num '+(pos?'pos':'neg')+'">'+eur(sum,2)+'</td></tr>';
+      return s;
+    }
+    h+='<div class="panel"><div class="alv-bar"><h2>Gewinn- und Verlustrechnung</h2><span class="sp"></span><span class="muted" style="font-size:12px">'+esc(selYear)+'</span></div><div class="alv-wrap"><table class="alv guv"><tbody>';
+    h+=sect("Erträge",ertr,eSum,true)+sect("Aufwendungen",aufw,aSum,false);
+    h+='</tbody><tfoot><tr><td>Jahresergebnis '+esc(selYear)+'</td><td class="num '+(ergebnis<0?'neg':'pos')+'">'+(ergebnis>=0?'+':'')+eur(ergebnis,2)+'</td></tr></tfoot></table></div></div>';
     return h;
   }
   // ===== Launchpad (Apps) für Detmold & Paderborn =====
@@ -1658,6 +1700,7 @@ var ERP_CFG={
     if(code==="D"){ p.innerHTML=paderbornHubHTML(); return; }                      // Paderborn-Launchpad (Apps)
     if(code==="DUPL"){ p.innerHTML=uploadAppHTML("DUPL"); return; }                // N26-Kontoauszüge hochladen
     if(code==="DAUSW"){ p.innerHTML=auswertungHTML("DUPL"); return; }              // Auswertungen Paderborn
+    if(GUV2BUCH[code]){ p.innerHTML=guvAppHTML(GUV2BUCH[code]); return; }             // GuV-App (Business)
     if(PAGE2BUCH[code]){ p.innerHTML=segmentCockpitHTML(PAGE2BUCH[code]); return; } // Business-Segmente (Marbella / Private / Industrial)
     if(/BUCH$/.test(code)){ p.innerHTML=buchenHTML(code); return; }               // Hauptbuchbelege-Buchungsmaske (Business)
     if(node.children&&node.children.length){ p.innerHTML=groupHTML(code); return; }
@@ -1891,12 +1934,13 @@ function parseSheets(S){
     if(hr<0) return; // kein erkennbares Buchungs-Schema → überspringen
     var H=(A[hr]||[]).map(function(x){return String(x==null?"":x);});
     function ci(re){ for(var i=0;i<H.length;i++){ if(re.test(H[i])) return i; } return -1; }
-    var ix={id:ci(/^ID|DOCUMENT\s*NO/i),datum:ci(/Buchungsdatum|^Datum$|^DATE$/i),konto:ci(/^Konto|^BANK$/i),empf:ci(/Empfänger|Gegenpartei|^NAME$/i),zweck:ci(/Verwendungszweck|^REFERENCE$/i),betrag:ci(/Betrag|^AMOUNT$/i),kat:ci(/Kategorie|^CATEGORY$/i),typ:ci(/^Typ$|PAYMENT\s*TYPE/i),bkr:ci(/Buchungskreis|COMPANY\s*CODE/i),obj:ci(/Objekt|Stream/i)};
+    var ix={id:ci(/^ID|DOCUMENT\s*NO/i),datum:ci(/Buchungsdatum|^Datum$|^DATE$/i),konto:ci(/^Konto|^BANK$/i),empf:ci(/Empfänger|Gegenpartei|^NAME$/i),zweck:ci(/Verwendungszweck|^REFERENCE$/i),betrag:ci(/Betrag|^AMOUNT$/i),kat:ci(/Kategorie|^CATEGORY$/i),typ:ci(/^Typ$|PAYMENT\s*TYPE/i),bkr:ci(/Buchungskreis|COMPANY\s*CODE/i),obj:ci(/Objekt|Stream/i),acc:ci(/sachkonto|^account$/i)};
     for(var r2=hr+1;r2<A.length;r2++){ var row=A[r2]||[];
       var dv=ix.datum>=0?row[ix.datum]:null, bv=ix.betrag>=0?row[ix.betrag]:null;
       if((dv==null||dv==="")&&(bv==null||bv==="")) continue;
       var bn=num(bv); var kat=ix.kat>=0?String(row[ix.kat]||""):"";
-      acdoca.push({id:ix.id>=0?String(row[ix.id]||""):"",datum:dv?String(dv):"",konto:ix.konto>=0?String(row[ix.konto]||""):"",empf:ix.empf>=0?String(row[ix.empf]||""):"",zweck:ix.zweck>=0?String(row[ix.zweck]||""):"",betrag:bn==null?0:bn,kat:kat,typ:ix.typ>=0?String(row[ix.typ]||""):"",bkr:ix.bkr>=0?String(row[ix.bkr]||""):"",obj:ix.obj>=0?String(row[ix.obj]||""):"",journal:jn});
+      var accRaw=ix.acc>=0?row[ix.acc]:null, account=(accRaw==null||accRaw==="")?"":(isNaN(parseFloat(accRaw))?String(accRaw).trim():String(Math.round(parseFloat(accRaw))));
+      acdoca.push({id:ix.id>=0?String(row[ix.id]||""):"",datum:dv?String(dv):"",konto:ix.konto>=0?String(row[ix.konto]||""):"",empf:ix.empf>=0?String(row[ix.empf]||""):"",zweck:ix.zweck>=0?String(row[ix.zweck]||""):"",betrag:bn==null?0:bn,kat:kat,typ:ix.typ>=0?String(row[ix.typ]||""):"",bkr:ix.bkr>=0?String(row[ix.bkr]||""):"",obj:ix.obj>=0?String(row[ix.obj]||""):"",account:account,journal:jn});
       if(kat) acatsCount[kat]=1;
     }
   });
@@ -1973,7 +2017,10 @@ function parseSheets(S){
   // „Hauptbuchbelege buchen" in die drei Business-Vermietungen (H/I/J) einhängen — bucht in ACDOCA-B mit Buchungskreis 2020/2030/2040
   [['H','HBUCH','2020'],['I','IBUCH','2030'],['J','JBUCH','2040']].forEach(function(pr){
     var g=null; for(var i=0;i<SB.nav.length;i++){ if(SB.nav[i].code===pr[0]){ g=SB.nav[i]; break; } }
-    if(g){ if(!g.children)g.children=[]; if(!g.children.some(function(ch){return ch.code===pr[1];})) g.children.push({code:pr[1],label:'Hauptbuchbelege buchen',seite:g.label,desc:'Neue Buchung → ACDOCA-B (Buchungskreis '+pr[2]+')',world:'business',group:g.label}); }
+    if(g){ if(!g.children)g.children=[];
+      if(!g.children.some(function(ch){return ch.code===pr[1];})) g.children.push({code:pr[1],label:'Hauptbuchbelege buchen',seite:g.label,desc:'Neue Buchung → ACDOCA-B (Buchungskreis '+pr[2]+')',world:'business',group:g.label});
+      if(!g.children.some(function(ch){return ch.code===pr[0]+'GUV';})) g.children.push({code:pr[0]+'GUV',label:'GuV (Jahresübersicht)',seite:g.label,desc:'Gewinn- und Verlustrechnung',world:'business',group:g.label});
+    }
   });
   var brand2 = SP.brand || SB.brand || brand;
   // Generische Views für jede referenzierte Tabelle (einmal je Tabellenname)

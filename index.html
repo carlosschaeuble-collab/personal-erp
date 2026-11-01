@@ -1216,49 +1216,44 @@ var ERP_CFG={
     h+='</div>';
     return h;
   }
-  // GuV — Jahresübersicht (Gewinn- und Verlustrechnung), gegliedert nach Sachkonto
+  // Jahresübersicht als BWA-Matrix: Sachkonten (Zeilen) × Monate (Spalten), Summen in den Zellen
   function guvAppHTML(buchCode){
     var cfg=BUCHCFG[buchCode]||BUCHCFG.HBUCH, page=cfg.page;
     var segLbl=(byCode[page]&&byCode[page].label)||SHORT[page]||page;
     var all=AC.filter(function(x){ return matchSeg(x,cfg); });
     function yearOf(x){ var m=String(x.datum||"").match(/(\d{4})/); return m?m[1]:""; }
-    var h='<div class="crumb" data-go="'+esc(page)+'" style="cursor:pointer">‹ '+esc(segLbl)+'</div><div class="page-head"><h1>GuV · Jahresübersicht</h1><div class="sub">'+esc(segLbl)+'</div></div>';
-    if(!all.length){ h+='<div class="note-card"><p>Noch keine Buchungen.</p></div>'; return h; }
-    function ymOf(x){ var m=String(x.datum||"").match(/(\d{4})-(\d{2})/); return m?(m[1]+"-"+m[2]):""; }
+    function monOf(x){ var m=String(x.datum||"").match(/\d{4}-(\d{2})/); return m?(+m[1]):0; }
     var MN=["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
+    function f0(v){ v=Math.round(v||0); return (v<0?'−':'')+Math.abs(v).toLocaleString('de-DE'); }
+    var h='<div class="crumb" data-go="'+esc(page)+'" style="cursor:pointer">‹ '+esc(segLbl)+'</div><div class="page-head"><h1>Jahresübersicht · BWA</h1><div class="sub">'+esc(segLbl)+'</div></div>';
+    if(!all.length){ h+='<div class="note-card"><p>Noch keine Buchungen.</p></div>'; return h; }
     var years={}; all.forEach(function(x){ var y=yearOf(x); if(y)years[y]=1; });
     var yearList=Object.keys(years).sort().reverse();
     var selYear=(segYear&&years[segYear])?segYear:(yearList[0]||"");
-    var yearTx=all.filter(function(x){ return yearOf(x)===selYear; });
+    var tx=all.filter(function(x){ return yearOf(x)===selYear; });
     if(yearList.length>1){ h+='<div style="margin:2px 0 14px"><span class="seg">'+yearList.map(function(y){ return '<button class="seg-b'+(y===selYear?' on':'')+'" data-segyear="'+esc(y)+'">'+esc(y)+'</button>'; }).join('')+'</span></div>'; }
-    // Monatsergebnisse + gewählter Zeitraum (ganzes Jahr oder ein Monat)
-    var byM={}; yearTx.forEach(function(x){ var ym=ymOf(x); if(!ym)return; byM[ym]=(byM[ym]||0)+(x.betrag||0); });
-    var monthKeys=Object.keys(byM).sort();
-    var scope=(auswScope&&(byM[auswScope]!==undefined))?auswScope:"";
-    var tx=scope?yearTx.filter(function(x){ return ymOf(x)===scope; }):yearTx;
-    var scLabel=scope?(MN[(+scope.slice(5,7))-1]+' '+scope.slice(0,4)):('Jahr '+selYear);
-    var ertr={}, aufw={}, eSum=0, aSum=0;
-    tx.forEach(function(x){ var key=sachkontoLabel(x.bkr,x.account), b=x.betrag||0; if(b>=0){ ertr[key]=(ertr[key]||0)+b; eSum+=b; } else { aufw[key]=(aufw[key]||0)+b; aSum+=b; } });
-    var ergebnis=eSum+aSum;
-    h+='<section class="tiles">'
-      +tile("Erträge · "+scLabel,"+"+eur(eSum,0),esc(segLbl),"big")
-      +tile("Aufwendungen · "+scLabel,eur(aSum,0),"Kosten & Steuern")
-      +'<div class="tile"><p class="k">Ergebnis · '+esc(scLabel)+'</p><div class="v" style="color:'+(ergebnis>=0?'var(--pos)':'var(--neg)')+'">'+(ergebnis>=0?"+":"")+eur(ergebnis,0)+'</div><div class="d">'+(ergebnis>=0?'Gewinn':'Verlust')+'</div></div>'
-      +'</section>';
-    var amx=1; monthKeys.forEach(function(k){ amx=Math.max(amx,Math.abs(byM[k])); });
-    h+='<div class="panel"><div class="alv-bar"><h2>Ergebnis nach Monat</h2><span class="sp"></span><span class="seg"><button class="seg-b'+(scope?'':' on')+'" data-auswmonth="">Ganzes Jahr</button></span></div><div style="padding:12px 16px 16px">';
-    monthKeys.forEach(function(k){ var e=byM[k], mm=+k.slice(5,7), w=Math.max(2,Math.abs(e)/amx*100), on=(k===scope), neg=e<0; h+='<div class="bar-row" data-auswmonth="'+esc(k)+'" style="cursor:pointer;border-radius:7px;padding:5px 7px;margin:2px -7px;'+(on?'background:var(--row-hover);box-shadow:inset 0 0 0 1px var(--accent)':'')+'"><div class="bl" style="width:72px;flex:0 0 auto">'+MN[mm-1]+' '+k.slice(2,4)+'</div><div class="bt"><div class="bf" style="width:'+w.toFixed(1)+'%;background:'+(neg?'var(--neg)':'var(--pos)')+'"></div></div><div class="bv '+(neg?'neg':'pos')+'">'+(e>=0?'+':'')+eur(e,0)+'</div></div>'; });
-    h+='</div></div>';
-    function sect(title,obj,sum,pos){ var ks=Object.keys(obj).sort(function(a,b){return Math.abs(obj[b])-Math.abs(obj[a]);});
-      var s='<tr><td colspan="2" style="font-weight:600;background:var(--alv-head)">'+esc(title)+'</td></tr>';
-      if(!ks.length) s+='<tr><td class="muted" style="padding-left:20px">—</td><td class="num"></td></tr>';
-      ks.forEach(function(k){ s+='<tr><td style="padding-left:20px">'+esc(k)+'</td><td class="num '+(pos?'pos':'neg')+'">'+eur(obj[k],2)+'</td></tr>'; });
-      s+='<tr style="font-weight:600"><td>Summe '+esc(title)+'</td><td class="num '+(pos?'pos':'neg')+'">'+eur(sum,2)+'</td></tr>';
+    var monSet={}; tx.forEach(function(x){ var mo=monOf(x); if(mo)monSet[mo]=1; });
+    var mons=Object.keys(monSet).map(Number).sort(function(a,b){return a-b;});
+    if(!mons.length) mons=[1];
+    var rows={}; tx.forEach(function(x){ var key=sachkontoLabel(x.bkr,x.account), mo=monOf(x), b=x.betrag||0; if(!rows[key])rows[key]={byMon:{},sum:0}; if(mo)rows[key].byMon[mo]=(rows[key].byMon[mo]||0)+b; rows[key].sum+=b; });
+    var rowKeys=Object.keys(rows);
+    var ertrK=rowKeys.filter(function(k){return rows[k].sum>=0;}).sort(function(a,b){return rows[b].sum-rows[a].sum;});
+    var aufwK=rowKeys.filter(function(k){return rows[k].sum<0;}).sort(function(a,b){return rows[a].sum-rows[b].sum;});
+    function colSum(keys,mo){ var s=0; keys.forEach(function(k){ s+=rows[k].byMon[mo]||0; }); return s; }
+    function numCell(v,bold){ return '<td class="num'+(bold?' bold':'')+(v<0?' neg':(v>0?' pos':' muted'))+'">'+(v?f0(v):'·')+'</td>'; }
+    var ncol=mons.length+2;
+    var t='<div class="panel"><div class="alv-bar"><h2>BWA · Sachkonten nach Monat</h2><span class="sp"></span><span class="muted" style="font-size:12px">'+esc(selYear)+' · Werte in €</span></div><div class="alv-wrap"><table class="alv guv"><thead><tr><th>Sachkonto</th>';
+    mons.forEach(function(mo){ t+='<th class="num">'+MN[mo-1]+'</th>'; });
+    t+='<th class="num">Summe</th></tr></thead><tbody>';
+    function grp(title,keys){ if(!keys.length) return '';
+      var s='<tr><td colspan="'+ncol+'" style="font-weight:600;background:var(--alv-head)">'+esc(title)+'</td></tr>';
+      keys.forEach(function(k){ s+='<tr><td>'+esc(k)+'</td>'; mons.forEach(function(mo){ s+=numCell(rows[k].byMon[mo]||0,false); }); s+=numCell(rows[k].sum,true)+'</tr>'; });
+      s+='<tr style="font-weight:600"><td>Summe '+esc(title)+'</td>'; var gt=0; mons.forEach(function(mo){ var cs=colSum(keys,mo); gt+=cs; s+=numCell(cs,true); }); s+=numCell(gt,true)+'</tr>';
       return s;
     }
-    h+='<div class="panel"><div class="alv-bar"><h2>Gewinn- und Verlustrechnung</h2><span class="sp"></span><span class="muted" style="font-size:12px">'+esc(scLabel)+'</span></div><div class="alv-wrap"><table class="alv guv"><tbody>';
-    h+=sect("Erträge",ertr,eSum,true)+sect("Aufwendungen",aufw,aSum,false);
-    h+='</tbody><tfoot><tr><td>Ergebnis · '+esc(scLabel)+'</td><td class="num '+(ergebnis<0?'neg':'pos')+'">'+(ergebnis>=0?'+':'')+eur(ergebnis,2)+'</td></tr></tfoot></table></div></div>';
+    t+=grp("Erträge",ertrK)+grp("Aufwendungen",aufwK);
+    t+='</tbody><tfoot><tr><td>Ergebnis</td>'; var tot=0; mons.forEach(function(mo){ var es=colSum(ertrK,mo)+colSum(aufwK,mo); tot+=es; t+=numCell(es,true); }); t+=numCell(tot,true)+'</tr></tfoot></table></div></div>';
+    h+=t;
     return h;
   }
   // ===== Launchpad (Apps) für Detmold & Paderborn =====

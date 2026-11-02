@@ -1099,6 +1099,7 @@ var ERP_CFG={
       h+='<div class="two">'+empfField+bkrField+'</div>';
       h+=hasCoa ? ('<div class="two">'+sachkontoField+zweckField+'</div>') : zweckField;
     }
+    h+='<div class="row"><label>Dokument <span class="muted" style="font-weight:400">(optional)</span></label><input type="file" id="bk_doc" accept=".pdf,.png,.jpg,.jpeg,.heic,.heif,.webp,.gif,.doc,.docx,.xls,.xlsx,.csv,.txt,.eml"><div class="muted" style="font-size:12px;margin-top:4px">Rechnung/Beleg wird in deinem Google&nbsp;Drive gespeichert (Ordner „Personal ERP Belege" · Unterordner je Buchungskreis).</div></div>';
     h+='<div style="margin-top:4px"><button class="editbtn on" data-buchen="'+esc(code)+'">Beleg buchen</button></div>';
     h+='</div></div></div>';
     return h;
@@ -1111,7 +1112,7 @@ var ERP_CFG={
     var h='<div class="crumb" data-go="'+esc(page)+'" style="cursor:pointer">‹ '+esc(segLbl)+'</div><div class="page-head"><h1>'+esc(t.label)+'</h1></div>';
     h+=buchenFormHTML(code);
     h+='<div class="panel"><div class="alv-bar"><h2>Zuletzt gebucht</h2><span class="sp"></span><span class="count">'+tx.length+'</span></div><div class="alv-wrap"><table class="alv"><thead><tr><th>Datum</th><th>Begünstiger</th><th>Kategorie</th><th class="num">Betrag</th></tr></thead><tbody>';
-    tx.slice().sort(function(a,b){return a.datum<b.datum?1:-1;}).slice(0,8).forEach(function(x){ var neg=x.betrag<0; h+='<tr><td>'+esc(x.datum)+'</td><td class="name">'+esc(x.empf)+'</td><td>'+esc(x.kat)+'</td><td class="num '+(neg?'neg':'pos')+'">'+eur(x.betrag,2)+'</td></tr>'; });
+    tx.slice().sort(function(a,b){return a.datum<b.datum?1:-1;}).slice(0,8).forEach(function(x){ var neg=x.betrag<0; h+='<tr><td>'+esc(x.datum)+'</td><td class="name">'+esc(x.empf)+(x.belegUrl?' <a href="'+esc(x.belegUrl)+'" target="_blank" rel="noopener" title="Dokument öffnen" style="text-decoration:none">📎</a>':'')+'</td><td>'+esc(x.kat)+'</td><td class="num '+(neg?'neg':'pos')+'">'+eur(x.betrag,2)+'</td></tr>'; });
     h+='</tbody></table></div></div>';
     return h;
   }
@@ -1131,6 +1132,7 @@ var ERP_CFG={
       if(/^konto$|^bank$/i.test(h)) return v.konto||"";
       if(/buchungsdatum|^datum$|^date$/i.test(h)) return v.date||"";
       if(/document\s*no|^id\b/i.test(h)) return v.doc||"";
+      if(/^dokument$|belegdokument|^anhang$|^beleg-?link$/i.test(h)) return v.belegUrl||"";
       if(/business\s*partner/i.test(h)) return "";
       if(/empf(ä|ae)nger|gegenpartei|^name$/i.test(h)) return v.name||"";
       if(/verwendungszweck|^reference$/i.test(h)) return v.ref||"";
@@ -1160,12 +1162,40 @@ var ERP_CFG={
     if(!betrag){ toast("Bitte gültigen Betrag angeben (z. B. -123,45).",true); return; }
     var jr=cfg.journal||"ACDOCA";
     var id=nextBelegId(cfg);
-    var row=journalRow(jr,{date:datum,doc:id,konto:cfg.konto||"",name:empf,ref:zweck,amount:betrag,currency:"EUR",category:category,bkr:bkr,type:"Hauptbuchbeleg",account:sachkonto,coa:coaChart,quelle:cfg.konto||"",stream:cfg.stream||"",istplan:"Ist"});
-    toast("Buche Beleg "+id+" …");
-    window.ERP_append(jr,[row]).then(function(){
-      if(window.__SHEETS){ var A=window.__SHEETS[jr]||(window.__SHEETS[jr]=[]); A.push(row); boot(parseSheets(window.__SHEETS),cfg.page||cfg.after); }
-      toast("✓ Beleg "+id+" gebucht: "+empf+" "+eur(betrag,2));
-    }).catch(function(e){ toast("✗ Fehler: "+(e.message||e),true); });
+    var fileEl=document.getElementById('bk_doc'), file=(fileEl&&fileEl.files&&fileEl.files[0])||null;
+    function finish(belegUrl){
+      var row=journalRow(jr,{date:datum,doc:id,konto:cfg.konto||"",name:empf,ref:zweck,amount:betrag,currency:"EUR",category:category,bkr:bkr,type:"Hauptbuchbeleg",account:sachkonto,coa:coaChart,quelle:cfg.konto||"",stream:cfg.stream||"",istplan:"Ist",belegUrl:belegUrl||""});
+      toast("Buche Beleg "+id+" …");
+      window.ERP_append(jr,[row]).then(function(){
+        if(window.__SHEETS){ var A=window.__SHEETS[jr]||(window.__SHEETS[jr]=[]); A.push(row); boot(parseSheets(window.__SHEETS),cfg.page||cfg.after); }
+        toast("✓ Beleg "+id+" gebucht: "+empf+" "+eur(betrag,2)+(belegUrl?" · 📎 Dokument gespeichert":""));
+      }).catch(function(e){ toast("✗ Fehler: "+(e.message||e),true); });
+    }
+    if(file){
+      if(!window.ERP_uploadDoc){ toast("Datei-Upload nicht verfügbar — bitte neu anmelden.",true); return; }
+      if(file.size>25*1024*1024){ toast("Dokument zu groß (max. 25 MB).",true); return; }
+      var bkList=(D&&D.bkrList)||[], bkNm=""; bkList.forEach(function(e){ if(e.schluessel===bkr) bkNm=e.name; });
+      var sub=bkr?(bkr+(bkNm?(" – "+bkNm):"")):"Ohne Buchungskreis";
+      var ext=(String(file.name).match(/\.[^.\s]+$/)||[""])[0];
+      var safeEmpf=empf.replace(/[\\/:*?"<>|]+/g,"_").replace(/\s+/g,"_").slice(0,40);
+      var fname=id+"_"+safeEmpf+"_"+datum+ext;
+      toast("Lade Dokument hoch …");
+      window.ERP_uploadDoc(file,"Personal ERP Belege",sub,fname).then(function(res){
+        var url=(res&&res.webViewLink)||(res&&res.id?("https://drive.google.com/file/d/"+res.id+"/view"):"");
+        ensureDocCol(jr).then(function(){ finish(url); },function(){ finish(url); });
+      }).catch(function(e){ toast("✗ Upload fehlgeschlagen: "+(e.message||e),true); });
+    } else {
+      finish("");
+    }
+  }
+  // Journal-Spalte „Dokument" sicherstellen — legt sie bei Bedarf im echten Sheet an (Mock/offline: kein Schreiben)
+  function ensureDocCol(journal){
+    var S=window.__SHEETS||{}, A=S[journal]; if(!A||!A.length) return Promise.resolve(-1);
+    var H=(A[0]||[]).map(function(x){return String(x==null?"":x).trim();});
+    for(var i=0;i<H.length;i++){ if(/^dokument$|belegdokument|^anhang$|^beleg-?link$/i.test(H[i])) return Promise.resolve(i); }
+    if(!window.ERP_write||!window.__SHEET_IDS) return Promise.resolve(-1);
+    var col=H.length, a1="'"+String(journal).replace(/'/g,"''")+"'!"+colLetter(col)+"1";
+    return window.ERP_write(a1,"Dokument").then(function(){ (A[0]||(A[0]=[]))[col]="Dokument"; return col; });
   }
   // Ein Beleg gehört zu einem Segment: Detmold über Objekt/Stream; Business über Buchungskreis (2020/2030/2040) bzw. Beleg-Präfix
   function matchSeg(x,cfg){
@@ -1206,7 +1236,7 @@ var ERP_CFG={
     h+='<div class="ov-cols">';
     var sorted=tx.slice().sort(function(a,b){ return a.datum<b.datum?1:a.datum>b.datum?-1:(a.id<b.id?1:a.id>b.id?-1:0); });
     h+='<div class="panel"><div class="alv-bar"><h2>Letzte Einträge</h2><span class="count">'+tx.length+'</span><span class="sp"></span><span class="muted" style="font-size:12px">'+esc(selYear)+'</span></div><div class="alv-wrap" style="max-height:440px"><table class="alv"><thead><tr><th>Datum</th><th>Beleg</th><th>Begünstiger</th><th class="num">Betrag</th></tr></thead><tbody>';
-    sorted.forEach(function(x){ var neg=x.betrag<0; h+='<tr><td>'+esc(String(x.datum||"").slice(0,10))+'</td><td class="idtag">'+esc(x.id)+'</td><td class="name">'+esc(x.empf)+'</td><td class="num '+(neg?'neg':'pos')+'">'+eur(x.betrag,2)+'</td></tr>'; });
+    sorted.forEach(function(x){ var neg=x.betrag<0; h+='<tr><td>'+esc(String(x.datum||"").slice(0,10))+'</td><td class="idtag">'+esc(x.id)+(x.belegUrl?' <a href="'+esc(x.belegUrl)+'" target="_blank" rel="noopener" title="Dokument öffnen" style="text-decoration:none">📎</a>':'')+'</td><td class="name">'+esc(x.empf)+'</td><td class="num '+(neg?'neg':'pos')+'">'+eur(x.betrag,2)+'</td></tr>'; });
     h+='</tbody><tfoot><tr><td colspan="3">Summe · '+tx.length+' Belege</td><td class="num '+(saldo<0?'neg':'pos')+'">'+eur(saldo,2)+'</td></tr></tfoot></table></div></div>';
     var byK={}; tx.forEach(function(x){ var k=isBiz?sachkontoLabel(x.bkr,x.account):(x.kat||"—"); if(!byK[k])byK[k]={sum:0,n:0}; byK[k].sum+=x.betrag; byK[k].n++; });
     var keys=Object.keys(byK).sort(function(a,b){return byK[a].sum-byK[b].sum;}); var mx=1; keys.forEach(function(k){ mx=Math.max(mx,Math.abs(byK[k].sum)); });
@@ -1319,7 +1349,7 @@ var ERP_CFG={
     var sorted=tx.slice().sort(function(a,b){ return a.datum<b.datum?1:a.datum>b.datum?-1:(a.id<b.id?1:a.id>b.id?-1:0); });
     var search='<span class="mini-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input class="grid-filter" placeholder="Filtern…" aria-label="Filtern"></span>';
     h+='<div class="panel"><div class="alv-bar"><h2>Alle Buchungen</h2><span class="count">'+tx.length+'</span><span class="sp"></span>'+search+'<span class="muted" style="font-size:12px">'+esc(cfg.journal)+(cfg.stream?(' · Stream '+esc(cfg.stream)):(' · Buchungskreis '+esc(cfg.bkr)))+'</span></div><div class="alv-wrap"><table class="alv"><thead><tr><th>Beleg</th><th>Datum</th><th>Begünstiger</th><th>Verwendungszweck</th><th>Kategorie</th><th class="num">Betrag</th></tr></thead><tbody>';
-    sorted.forEach(function(x){ var neg=x.betrag<0; h+='<tr><td class="idtag">'+esc(x.id)+'</td><td>'+esc(String(x.datum||"").slice(0,10))+'</td><td class="name">'+esc(x.empf)+'</td><td>'+esc(x.zweck||"")+'</td><td>'+esc(x.kat||"")+'</td><td class="num '+(neg?'neg':'pos')+'">'+eur(x.betrag,2)+'</td></tr>'; });
+    sorted.forEach(function(x){ var neg=x.betrag<0; h+='<tr><td class="idtag">'+esc(x.id)+(x.belegUrl?' <a href="'+esc(x.belegUrl)+'" target="_blank" rel="noopener" title="Dokument öffnen" style="text-decoration:none">📎</a>':'')+'</td><td>'+esc(String(x.datum||"").slice(0,10))+'</td><td class="name">'+esc(x.empf)+'</td><td>'+esc(x.zweck||"")+'</td><td>'+esc(x.kat||"")+'</td><td class="num '+(neg?'neg':'pos')+'">'+eur(x.betrag,2)+'</td></tr>'; });
     h+='</tbody><tfoot><tr><td colspan="5">Summe · '+tx.length+' Belege</td><td class="num '+(saldo<0?'neg':'pos')+'">'+eur(saldo,2)+'</td></tr></tfoot></table></div></div>';
     return h;
   }
@@ -1941,13 +1971,13 @@ function parseSheets(S){
     if(hr<0) return; // kein erkennbares Buchungs-Schema → überspringen
     var H=(A[hr]||[]).map(function(x){return String(x==null?"":x);});
     function ci(re){ for(var i=0;i<H.length;i++){ if(re.test(H[i])) return i; } return -1; }
-    var ix={id:ci(/^ID|DOCUMENT\s*NO/i),datum:ci(/Buchungsdatum|^Datum$|^DATE$/i),konto:ci(/^Konto|^BANK$/i),empf:ci(/Empfänger|Gegenpartei|^NAME$/i),zweck:ci(/Verwendungszweck|^REFERENCE$/i),betrag:ci(/Betrag|^AMOUNT$/i),kat:ci(/Kategorie|^CATEGORY$/i),typ:ci(/^Typ$|PAYMENT\s*TYPE/i),bkr:ci(/Buchungskreis|COMPANY\s*CODE/i),obj:ci(/Objekt|Stream/i),acc:ci(/sachkonto|^account$/i)};
+    var ix={id:ci(/^ID|DOCUMENT\s*NO/i),datum:ci(/Buchungsdatum|^Datum$|^DATE$/i),konto:ci(/^Konto|^BANK$/i),empf:ci(/Empfänger|Gegenpartei|^NAME$/i),zweck:ci(/Verwendungszweck|^REFERENCE$/i),betrag:ci(/Betrag|^AMOUNT$/i),kat:ci(/Kategorie|^CATEGORY$/i),typ:ci(/^Typ$|PAYMENT\s*TYPE/i),bkr:ci(/Buchungskreis|COMPANY\s*CODE/i),obj:ci(/Objekt|Stream/i),acc:ci(/sachkonto|^account$/i),beleg:ci(/^dokument$|belegdokument|^anhang$|^beleg-?link$/i)};
     for(var r2=hr+1;r2<A.length;r2++){ var row=A[r2]||[];
       var dv=ix.datum>=0?row[ix.datum]:null, bv=ix.betrag>=0?row[ix.betrag]:null;
       if((dv==null||dv==="")&&(bv==null||bv==="")) continue;
       var bn=num(bv); var kat=ix.kat>=0?String(row[ix.kat]||""):"";
       var accRaw=ix.acc>=0?row[ix.acc]:null, account=(accRaw==null||accRaw==="")?"":(isNaN(parseFloat(accRaw))?String(accRaw).trim():String(Math.round(parseFloat(accRaw))));
-      acdoca.push({id:ix.id>=0?String(row[ix.id]||""):"",datum:dv?String(dv):"",konto:ix.konto>=0?String(row[ix.konto]||""):"",empf:ix.empf>=0?String(row[ix.empf]||""):"",zweck:ix.zweck>=0?String(row[ix.zweck]||""):"",betrag:bn==null?0:bn,kat:kat,typ:ix.typ>=0?String(row[ix.typ]||""):"",bkr:ix.bkr>=0?String(row[ix.bkr]||""):"",obj:ix.obj>=0?String(row[ix.obj]||""):"",account:account,journal:jn});
+      acdoca.push({id:ix.id>=0?String(row[ix.id]||""):"",datum:dv?String(dv):"",konto:ix.konto>=0?String(row[ix.konto]||""):"",empf:ix.empf>=0?String(row[ix.empf]||""):"",zweck:ix.zweck>=0?String(row[ix.zweck]||""):"",betrag:bn==null?0:bn,kat:kat,typ:ix.typ>=0?String(row[ix.typ]||""):"",bkr:ix.bkr>=0?String(row[ix.bkr]||""):"",obj:ix.obj>=0?String(row[ix.obj]||""):"",account:account,belegUrl:ix.beleg>=0?String(row[ix.beleg]||""):"",journal:jn});
       if(kat) acatsCount[kat]=1;
     }
   });
@@ -2063,6 +2093,39 @@ function parseSheets(S){
     var url="https://sheets.googleapis.com/v4/spreadsheets/"+ERP_CFG.SPREADSHEET_ID+"/values/"+rng+":append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS";
     return fetch(url,{method:"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({values:rows2d})}).then(function(r){ return r.text().then(function(t){ if(!r.ok) throw new Error("HTTP "+r.status+": "+t.slice(0,180)); return JSON.parse(t); }); });
   };
+  /* ---- Google Drive: Beleg-Dokumente in den eigenen Drive hochladen (Scope drive.file → nur von dieser App erstellte Dateien/Ordner sind sichtbar) ---- */
+  var __erpFolders={};
+  function driveFind(name,parent){
+    var q="mimeType='application/vnd.google-apps.folder' and trashed=false and name='"+String(name).replace(/'/g,"\\'")+"'"+(parent?(" and '"+parent+"' in parents"):"");
+    var url="https://www.googleapis.com/drive/v3/files?spaces=drive&pageSize=1&fields="+encodeURIComponent("files(id,name)")+"&q="+encodeURIComponent(q);
+    return fetch(url,{headers:{Authorization:"Bearer "+token}}).then(function(r){ return r.text().then(function(t){ if(!r.ok) throw new Error("HTTP "+r.status+": "+t.slice(0,160)); var j=JSON.parse(t); return (j.files&&j.files[0]&&j.files[0].id)||null; }); });
+  }
+  function driveMkdir(name,parent){
+    var meta={name:name,mimeType:"application/vnd.google-apps.folder"}; if(parent) meta.parents=[parent];
+    return fetch("https://www.googleapis.com/drive/v3/files?fields=id",{method:"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify(meta)}).then(function(r){ return r.text().then(function(t){ if(!r.ok) throw new Error("HTTP "+r.status+": "+t.slice(0,160)); return JSON.parse(t).id; }); });
+  }
+  function driveFolder(name,parent){
+    var key=(parent||"root")+"\n"+name; if(__erpFolders[key]) return Promise.resolve(__erpFolders[key]);
+    return driveFind(name,parent).then(function(id){ return id||driveMkdir(name,parent); }).then(function(id){ __erpFolders[key]=id; return id; });
+  }
+  window.ERP_uploadDoc=function(file,rootName,subName,fileName){
+    if(!token) return Promise.reject(new Error("nicht angemeldet"));
+    if(!file) return Promise.reject(new Error("keine Datei gewählt"));
+    return driveFolder(rootName||"Personal ERP Belege",null).then(function(root){ return subName?driveFolder(subName,root):root; }).then(function(parentId){
+      return new Promise(function(resolve,reject){
+        var fr=new FileReader();
+        fr.onerror=function(){ reject(new Error("Datei konnte nicht gelesen werden")); };
+        fr.onload=function(){
+          var b64=String(fr.result||"").split(",")[1]||"";
+          var meta={name:fileName||file.name||"Beleg",parents:[parentId]};
+          var bnd="erpbnd"+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+          var body="--"+bnd+"\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n"+JSON.stringify(meta)+"\r\n--"+bnd+"\r\nContent-Type: "+(file.type||"application/octet-stream")+"\r\nContent-Transfer-Encoding: base64\r\n\r\n"+b64+"\r\n--"+bnd+"--";
+          fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields="+encodeURIComponent("id,webViewLink"),{method:"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"multipart/related; boundary="+bnd},body:body}).then(function(r){ return r.text().then(function(t){ if(!r.ok) throw new Error("HTTP "+r.status+": "+t.slice(0,180)); return JSON.parse(t); }); }).then(resolve,reject);
+        };
+        fr.readAsDataURL(file);
+      });
+    });
+  };
   window.ERP_format=function(){
     var tt=(window.ERP&&window.ERP.toast)||function(){};
     if(!token){ tt("Bitte zuerst anmelden.",true); return; }
@@ -2096,7 +2159,7 @@ function parseSheets(S){
   whenGis(function(){
     tokenClient=google.accounts.oauth2.initTokenClient({
       client_id:ERP_CFG.CLIENT_ID,
-      scope:"https://www.googleapis.com/auth/spreadsheets",
+      scope:"https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file",
       callback:function(resp){
         if(resp&&resp.error){ status("Anmeldung abgebrochen: "+resp.error,true); return; }
         token=resp.access_token; loadAndBoot();

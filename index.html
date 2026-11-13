@@ -732,6 +732,64 @@ var ERP_CFG={
   }
   function fmtMenge(m){ if(m==null||isNaN(m))return "—"; var n=Number(m); return n%1===0? n.toLocaleString("de-DE") : n.toLocaleString("de-DE",{maximumFractionDigits:6}); }
   var ASSET_GROUPS=[{key:"wp",label:"Aktien & ETFs",color:"#0070f2"},{key:"kr",label:"Krypto",color:"#e76500"},{key:"em",label:"Edelmetalle & Sachwerte",color:"#8b5cf6"}];
+  // ===== Bank Accounts — Konten-Cockpit mit Gesamtsaldo =====
+  function bankHTML(v){
+    var all=(v.accounts||[]).slice();
+    var A=all.filter(function(a){ return inSphere(a.bkr); });   // nach aktiver Welt filtern
+    var total=0; A.forEach(function(a){ total+=a.saldo; });
+    var banks={}; A.forEach(function(a){ if(a.bank) banks[a.bank.toLowerCase()]=1; });
+    var nBanks=Object.keys(banks).length;
+    var em=!!editState["BACC"];
+    var cmp=(D&&D.comp)||{}, bkName={}; Object.keys(cmp).forEach(function(k){ bkName[k]=cmp[k].name||""; });
+    var sl=sphere==='business'?'Business':sphere==='gesamt'?'Gesamt':'Privat';
+    var h='<div class="crumb">'+esc(sl)+' › Bank Accounts</div>';
+    h+='<div class="page-head"><div><h1>Bank Accounts</h1><div class="sub">Alle Bankkonten &amp; Saldo</div></div><span style="flex:1"></span><button class="editbtn'+(em?' on':'')+'" data-edit="BACC">'+(em?'✓ Fertig':'✎ Bearbeiten')+'</button></div>';
+    h+='<section class="tiles">'
+      +'<div class="tile big"><p class="k">Gesamtsaldo</p><div class="v" style="color:'+(total>=0?'var(--pos)':'var(--neg)')+'">'+eur(total)+'</div><div class="d">'+A.length+' Konten · '+nBanks+' Banken</div></div>'
+      +tile("Konten",String(A.length),"aktive Bankkonten")
+      +tile("Banken",String(nBanks),"verschiedene Institute")
+      +'</section>';
+    if(!A.length){ h+='<div class="note-card"><p>Keine Bankkonten in dieser Welt ('+esc(sl)+').</p></div>'; return h; }
+    if(em){
+      h+='<div class="note-card" style="padding:10px 14px;margin-bottom:12px;max-width:none"><p style="margin:0;font-size:12.5px" class="muted">Bank, Konto, Buchungskreis &amp; Kontostand sind editierbar — der <b>Gesamtsaldo</b> aktualisiert sich nach „✓ Fertig". Die <b>Konto-ID</b> bleibt als stabiler Schlüssel bestehen.</p></div>';
+      h+=bankEditTable(A,v);
+      return h;
+    }
+    // Konten nach Saldo (Balken)
+    var pos=A.slice().sort(function(a,b){return b.saldo-a.saldo;});
+    var pmx=1; pos.forEach(function(p){ if(Math.abs(p.saldo)>pmx)pmx=Math.abs(p.saldo); });
+    h+='<div class="panel"><div class="alv-bar"><h2>Konten nach Saldo</h2><span class="sp"></span><span class="count">'+pos.length+'</span></div><div style="padding:16px 16px 18px">';
+    pos.forEach(function(p){ var w=Math.max(2,Math.abs(p.saldo)/pmx*100), pct=total?p.saldo/total*100:0, c=p.saldo<0?'var(--neg)':'#0070f2';
+      h+='<div class="bar-row"><div class="bl pname" title="'+esc(p.bank+(p.konto?' · '+p.konto:''))+'"><span class="pdot" style="background:'+c+'"></span><span class="pnm">'+esc(p.bank)+(p.konto?' <span class="muted" style="font-weight:400">· '+esc(p.konto)+'</span>':'')+'</span></div><div class="bt"><div class="bf" style="width:'+w.toFixed(1)+'%;background:'+c+'"></div></div><div class="bv">'+eur(p.saldo)+' <span class="muted" style="font-weight:400">· '+pct.toFixed(0)+'%</span></div></div>';
+    });
+    h+='</div></div>';
+    // Gruppen nach Buchungskreis
+    var groups={}, order=[]; A.forEach(function(a){ var k=a.bkr||"—"; if(!groups[k]){groups[k]=[];order.push(k);} groups[k].push(a); });
+    order.sort();
+    order.forEach(function(k){ h+=bankTable(k,bkName[k],groups[k],total); });
+    return h;
+  }
+  function bankTable(bkr,name,rows,total){
+    rows=rows.slice().sort(function(a,b){return b.saldo-a.saldo;});
+    var sum=0; rows.forEach(function(r){sum+=r.saldo;});
+    var title=(bkr&&bkr!=="—")?('Buchungskreis '+bkr+(name?' · '+name:'')):'Ohne Buchungskreis';
+    var h='<div class="panel"><div class="alv-bar"><h2>'+esc(title)+'</h2><span class="count">'+rows.length+'</span><span class="sp"></span><span class="muted" style="font-size:12px">'+eur(sum)+(total?(' · '+(sum/total*100).toFixed(0)+' %'):'')+'</span></div><div class="alv-wrap"><table class="alv"><thead><tr><th>Konto-ID</th><th>Bank</th><th>Konto</th><th class="num">Kontostand (€)</th><th class="num">Anteil</th></tr></thead><tbody>';
+    rows.forEach(function(p){ var ant=total?p.saldo/total*100:0;
+      h+='<tr><td class="idtag">'+esc(p.id)+'</td><td class="name">'+esc(p.bank)+'</td><td>'+esc(p.konto||"—")+'</td><td class="num'+(p.saldo<0?' neg':'')+'">'+eur(p.saldo)+'</td><td class="num muted">'+ant.toFixed(1)+' %</td></tr>';
+    });
+    h+='</tbody><tfoot><tr><td>Summe</td><td></td><td></td><td class="num'+(sum<0?' neg':'')+'">'+eur(sum)+'</td><td class="num">'+(total?(sum/total*100).toFixed(1):0)+' %</td></tr></tfoot></table></div></div>';
+    return h;
+  }
+  function bankEditTable(A,v){
+    var ci=v.colIdx||{};
+    var rows=A.slice().sort(function(a,b){ var x=String(a.bkr),y=String(b.bkr); return x<y?-1:x>y?1:(b.saldo-a.saldo); });
+    function ed(col,val,p){ if(col==null||col<0) return '<td>'+esc(val==null?"":val)+'</td>'; var a1="'BACC'!"+colLetter(col)+(p.row+1); return '<td class="edit-td"><input class="cell-edit" data-a1="'+a1+'" data-sheet="BACC" data-srow="'+p.row+'" data-scol="'+col+'" value="'+esc(val==null?"":val)+'"></td>'; }
+    var h='<div class="panel"><div class="alv-bar"><h2>Alle Konten</h2><span class="count">'+rows.length+'</span></div><div class="alv-wrap"><table class="alv"><thead><tr><th>Konto-ID</th><th>Bank</th><th>Konto</th><th>Buchungskreis</th><th class="num">Kontostand (€)</th></tr></thead><tbody>';
+    rows.forEach(function(p){ h+='<tr><td class="idtag">'+esc(p.id)+'</td>'+ed(ci.bank,p.bank,p)+ed(ci.konto,p.konto,p)+ed(ci.bkr,p.bkr,p)+ed(ci.saldo,p.saldo,p)+'</tr>'; });
+    var sum=0; rows.forEach(function(r){sum+=r.saldo;});
+    h+='</tbody><tfoot><tr><td>Summe</td><td></td><td></td><td></td><td class="num'+(sum<0?' neg':'')+'">'+eur(sum)+'</td></tr></tfoot></table></div></div>';
+    return h;
+  }
   function assetHTML(v){
     var P=(v.positions||[]).slice();
     var total=0,totalEin=0; P.forEach(function(p){ total+=p.wert; totalEin+=p.einWert; });
@@ -1739,6 +1797,7 @@ var ERP_CFG={
     if(/BUCH$/.test(code)){ p.innerHTML=buchenHTML(code); return; }               // Hauptbuchbelege-Buchungsmaske (Business)
     if(node.children&&node.children.length){ p.innerHTML=groupHTML(code); return; }
     var tn=node.table, v=tn?V[tn]:null;
+    if(v&&v.kind==="bank"){ p.innerHTML=bankHTML(v); return; }                     // Bank Accounts (Konten-Cockpit + Saldo)
     if(v&&v.kind==="asset"){ p.innerHTML=assetHTML(v); return; }                   // Wealth Management (Depot-Cockpit)
     if(v&&v.kind==="grid"){ v.title=node.label||tn; p.innerHTML=gridHTML(v,code); return; }
     p.innerHTML=noteHTML(code);
@@ -1896,6 +1955,23 @@ function parseSheets(S){
       P.push({id:iId>=0?String(row[iId]||""):"",name:String(nm).trim(),ref:ref.trim(),depot:dep.trim(),menge:mng,kurs:kurs,einstand:ein,bkr:bkr,wert:round2(wert),einWert:round2(einWert),gv:round2(wert-einWert),cls:assetClass(nm,ref,dep),row:r2});
     }
     views['ASSET']={kind:"asset",title:"Wealth Management",positions:P,header:H,headerRow:hr,colIdx:{id:iId,name:iName,ref:iRef,depot:iDep,menge:iMng,kurs:iKurs,einstand:iEin,bkr:iBkr,wert:iWert}};
+  })();
+  // Bank Accounts (BACC) — Grid-Basis (Overview-Summe) + Konten-/Saldo-Cockpit
+  (function(){
+    if(!(S['BACC']&&S['BACC'].length)) return;
+    var hrB=hdrRow('BACC',0), eB=extract('BACC',hrB), cols=eB.cols, rows=eB.rows, src=eB.srcRows;
+    function ci(re){ for(var i=0;i<cols.length;i++){ if(re.test(String(cols[i]||""))) return i; } return -1; }
+    var iId=ci(/^id$/i), iBank=ci(/^bank$/i), iKonto=ci(/^konto$|bezeichnung/i), iBkr=ci(/buchungskreis|company|^bkr$/i), iSaldo=ci(/kontostand|saldo|betrag/i);
+    if(iBank<0) iBank=1; if(iSaldo<0) iSaldo=cols.length-1;
+    var accts=[];
+    rows.forEach(function(row,ri){ var bank=iBank>=0?row[iBank]:null, sId=iId>=0?row[iId]:null;
+      if((bank==null||String(bank).trim()==="")&&(sId==null||String(sId).trim()===""))return;
+      var bkrRaw=iBkr>=0?row[iBkr]:null; var bkr=(bkrRaw==null||bkrRaw==="")?"":(isNaN(parseFloat(bkrRaw))?String(bkrRaw).trim():String(Math.round(parseFloat(bkrRaw))));
+      accts.push({id:iId>=0?String(row[iId]||""):"",bank:String(bank==null?"":bank).trim(),konto:iKonto>=0?String(row[iKonto]||"").trim():"",bkr:bkr,saldo:num(row[iSaldo])||0,row:src[ri]});
+    });
+    var money=[]; cols.forEach(function(c,i){ if(/kontostand|saldo|betrag|€|wert/i.test(String(c||"")))money.push(i); });
+    views['BACC']={kind:"bank",title:"Bank Accounts",accounts:accts,colIdx:{id:iId,bank:iBank,konto:iKonto,bkr:iBkr,saldo:iSaldo},
+      cols:cols,rows:rows,money_idx:money,sum_idx:(iSaldo>=0?iSaldo:null),bkrcol:iBkr,src:{sheet:'BACC',srcRows:src,headerRow:hrB,edit:"auto"}};
   })();
   // GuV
   var months=[]; for(r=5;r<=30;r++){ var jahr=cell('H1.3',r,0),monat=cell('H1.3',r,1); if(monat==null||(typeof monat==="string"&&monat.indexOf("Summe")===0))continue;

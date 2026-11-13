@@ -269,6 +269,9 @@ table.alv select.cell-edit{min-width:120px;cursor:pointer}
 table.alv input.cell-edit:focus,table.alv select.cell-edit:focus{outline:2px solid #bcd7fb;border-color:var(--accent)}
 table.alv input.cell-edit:disabled,table.alv select.cell-edit:disabled{opacity:.5}
 .idtag{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;color:var(--muted);white-space:nowrap}
+.gdot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:8px;flex:0 0 auto}
+.aname{font-weight:600;line-height:1.25}
+.aref{font-size:11px;color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;margin-top:1px}
 .toast{position:fixed;bottom:40px;left:50%;transform:translateX(-50%);background:#1d2d3b;color:#fff;font-size:13px;padding:9px 16px;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.2);z-index:200;opacity:0;transition:opacity .2s;pointer-events:none}
 .toast.show{opacity:1}
 .toast.err{background:var(--neg)}
@@ -727,68 +730,62 @@ var ERP_CFG={
       +'<text x="100" y="97" text-anchor="middle" class="dc-big">'+esc(big)+'</text>'
       +'<text x="100" y="115" text-anchor="middle" class="dc-small">'+esc(small)+'</text></svg>';
   }
-  function investHTML(v){
-    var em=!!editState["I2"];
-    var dep=0,gv=0; v.wp.rows.forEach(function(r){dep+=r[6];gv+=r[7];}); v.kr.rows.forEach(function(r){dep+=r[5];gv+=r[6];}); v.em.rows.forEach(function(r){dep+=r[6];gv+=r[7];});
-    var cost=dep-gv, gvPct=cost?gv/cost*100:0;
-    var h='<div class="crumb">Investments – Wertpapiere</div><div class="page-head"><h1>Investments</h1><span style="flex:1"></span><button class="editbtn'+(em?' on':'')+'" data-edit="I2">'+(em?'✓ Fertig':'✎ Bearbeiten')+'</button></div>';
-    if(em){ h+='<div class="note-card" style="padding:10px 14px;margin-bottom:12px;max-width:none"><p style="margin:0;font-size:12.5px" class="muted">Name, Stück/Menge, Kurs &amp; Co. editierbar — <b>Wert und G/V rechnen sich automatisch</b> nach „✓ Fertig".</p></div>'; }
-    else {
-      var wpS=0; v.wp.rows.forEach(function(r){wpS+=r[6];});
-      var krS=0; v.kr.rows.forEach(function(r){krS+=r[5];});
-      var emS=0; v.em.rows.forEach(function(r){emS+=r[6];});
-      var nPos=v.wp.rows.length+v.kr.rows.length+v.em.rows.length;
-      var CWP="#0070f2",CKR="#e76500",CEM="#8b5cf6";
-      h+='<section class="tiles">'
-        +tile("Depotwert",eur(dep),"Aktien · ETFs · Krypto · Edelmetalle","big")
-        +'<div class="tile"><p class="k">Gewinn / Verlust</p><div class="v" style="color:'+(gv>=0?'var(--pos)':'var(--neg)')+'">'+(gv>=0?"+":"")+eur(gv)+'</div><div class="d" style="color:'+(gv>=0?'var(--pos)':'var(--neg)')+'">'+(gv>=0?"+":"")+gvPct.toFixed(1)+' % zum Einstand</div></div>'
-        +tile("Eingesetzt",eur(cost),"Kaufwert gesamt")
-        +'</section>';
-      var segs=[{label:"Wertpapiere",value:wpS,color:CWP},{label:"Kryptowährungen",value:krS,color:CKR},{label:"Edelmetalle",value:emS,color:CEM}].filter(function(s){return s.value>0;});
-      h+='<div class="panel"><div class="alv-bar"><h2>Depot-Aufteilung</h2><span class="sp"></span><span class="count">'+nPos+' Positionen</span></div><div class="chartrow">';
-      h+=donutSVG(segs,dep,eur(dep),"DEPOTWERT");
+  function fmtMenge(m){ if(m==null||isNaN(m))return "—"; var n=Number(m); return n%1===0? n.toLocaleString("de-DE") : n.toLocaleString("de-DE",{maximumFractionDigits:6}); }
+  var ASSET_GROUPS=[{key:"wp",label:"Aktien & ETFs",color:"#0070f2"},{key:"kr",label:"Krypto",color:"#e76500"},{key:"em",label:"Edelmetalle & Sachwerte",color:"#8b5cf6"}];
+  function assetHTML(v){
+    var P=(v.positions||[]).slice();
+    var total=0,totalEin=0; P.forEach(function(p){ total+=p.wert; totalEin+=p.einWert; });
+    var gv=total-totalEin, gvPct=totalEin?gv/totalEin*100:0;
+    var gsum={}; ASSET_GROUPS.forEach(function(g){gsum[g.key]={wert:0,ein:0,n:0};});
+    P.forEach(function(p){ var g=gsum[p.cls]||(gsum[p.cls]={wert:0,ein:0,n:0}); g.wert+=p.wert; g.ein+=p.einWert; g.n++; });
+    var em=!!editState["ASSET"];
+    var h='<div class="crumb">Investments › Wealth Management</div>';
+    h+='<div class="page-head"><div><h1>Wealth Management</h1><div class="sub">Aktien · ETFs · Krypto · Edelmetalle &amp; Sachwerte</div></div><span style="flex:1"></span><button class="editbtn'+(em?' on':'')+'" data-edit="ASSET">'+(em?'✓ Fertig':'✎ Bearbeiten')+'</button></div>';
+    h+='<section class="tiles">'
+      +tile("Depotwert",eur(total),P.length+" Positionen","big")
+      +'<div class="tile"><p class="k">Gewinn / Verlust</p><div class="v" style="color:'+(gv>=0?'var(--pos)':'var(--neg)')+'">'+(gv>=0?"+":"")+eur(gv)+'</div><div class="d" style="color:'+(gv>=0?'var(--pos)':'var(--neg)')+'">'+(gv>=0?"+":"")+gvPct.toFixed(1)+' % zum Einstand</div></div>'
+      +tile("Eingesetzt",eur(totalEin),"Kaufwert gesamt")
+      +'</section>';
+    if(em){
+      h+='<div class="note-card" style="padding:10px 14px;margin-bottom:12px;max-width:none"><p style="margin:0;font-size:12.5px" class="muted">Name, Depot, Menge, Kurs &amp; Einstand sind editierbar — <b>Wert &amp; G/V rechnen sich automatisch</b> nach „✓ Fertig".</p></div>';
+    } else {
+      var segs=ASSET_GROUPS.map(function(g){return {label:g.label,value:gsum[g.key].wert,color:g.color};}).filter(function(s){return s.value>0;});
+      h+='<div class="panel"><div class="alv-bar"><h2>Vermögensaufteilung</h2><span class="sp"></span><span class="count">'+P.length+' Positionen</span></div><div class="chartrow">';
+      h+=donutSVG(segs,total,eur(total),"DEPOTWERT");
       h+='<div class="leg">';
-      if(segs.length) segs.forEach(function(s){ var pct=dep?s.value/dep*100:0; h+='<div class="leg-row"><span class="leg-dot" style="background:'+s.color+'"></span><span class="leg-name">'+esc(s.label)+'</span><span class="leg-val">'+eur(s.value)+'</span><span class="leg-pct">'+pct.toFixed(0)+' %</span></div>'; });
+      if(segs.length) segs.forEach(function(s){ var pct=total?s.value/total*100:0; h+='<div class="leg-row"><span class="leg-dot" style="background:'+s.color+'"></span><span class="leg-name">'+esc(s.label)+'</span><span class="leg-val">'+eur(s.value)+'</span><span class="leg-pct">'+pct.toFixed(0)+' %</span></div>'; });
       else h+='<div class="empty">Noch keine Positionen erfasst.</div>';
       h+='</div></div></div>';
-      var pos=[];
-      v.wp.rows.forEach(function(r){ pos.push([r[0],r[6],CWP]); });
-      v.kr.rows.forEach(function(r){ pos.push([r[0],r[5],CKR]); });
-      v.em.rows.forEach(function(r){ pos.push([r[0],r[6],CEM]); });
-      pos.sort(function(a,b){return b[1]-a[1];});
-      var pmx=1; pos.forEach(function(p){ if(p[1]>pmx)pmx=p[1]; });
+      var clsC={}; ASSET_GROUPS.forEach(function(g){clsC[g.key]=g.color;});
+      var pos=P.slice().sort(function(a,b){return b.wert-a.wert;});
+      var pmx=1; pos.forEach(function(p){ if(p.wert>pmx)pmx=p.wert; });
       if(pos.length){
-        h+='<div class="panel"><div class="alv-bar"><h2>Positionen nach Wert</h2><span class="sp"></span><span class="count">'+pos.length+'</span></div><div style="padding:16px 16px 18px">';
-        pos.forEach(function(p){ var w=Math.max(2,p[1]/pmx*100), pct=dep?p[1]/dep*100:0;
-          h+='<div class="bar-row"><div class="bl pname" title="'+esc(p[0])+'"><span class="pdot" style="background:'+p[2]+'"></span><span class="pnm">'+esc(p[0])+'</span></div><div class="bt"><div class="bf" style="width:'+w.toFixed(1)+'%;background:'+p[2]+'"></div></div><div class="bv">'+eur(p[1])+' <span class="muted" style="font-weight:400">· '+pct.toFixed(0)+'%</span></div></div>';
+        h+='<div class="panel"><div class="alv-bar"><h2>Top-Positionen nach Wert</h2><span class="sp"></span><span class="count">'+pos.length+'</span></div><div style="padding:16px 16px 18px">';
+        pos.forEach(function(p){ var w=Math.max(2,p.wert/pmx*100), pct=total?p.wert/total*100:0, c=clsC[p.cls]||"#5b738b";
+          h+='<div class="bar-row"><div class="bl pname" title="'+esc(p.name)+'"><span class="pdot" style="background:'+c+'"></span><span class="pnm">'+esc(p.name)+'</span></div><div class="bt"><div class="bf" style="width:'+w.toFixed(1)+'%;background:'+c+'"></div></div><div class="bv">'+eur(p.wert)+' <span class="muted" style="font-weight:400">· '+pct.toFixed(0)+'%</span></div></div>';
         });
         h+='</div></div>';
       }
     }
-    h+=section("Wertpapiere",v.wp,[3,4,5,6,7],6,7,em,dep);
-    h+=section("Kryptowährungen",v.kr,[2,3,4,5,6],5,6,em,dep);
-    h+=section("Edelmetalle",v.em,[4,5,6,7],6,7,em,dep);
+    ASSET_GROUPS.forEach(function(g){ var rows=P.filter(function(p){return p.cls===g.key;}); if(rows.length) h+=assetTable(g,rows,total,v,em); });
     return h;
   }
-  function section(title,t,moneyIdx,wertIdx,gvIdx,em,dep){
-    function editOf(i){ if(!em||!t.edit)return null; for(var j=0;j<t.edit.length;j++){ if(t.edit[j].d===i)return t.edit[j].s; } return null; }
-    var extra=!em;
-    var h='<div class="panel"><div class="alv-bar"><h2>'+title+'</h2><span class="count">'+t.rows.length+'</span></div><div class="alv-wrap"><table class="alv"><thead><tr>';
-    t.cols.forEach(function(c,i){ h+='<th class="'+(moneyIdx.indexOf(i)>=0?'num':'')+'">'+esc(c)+'</th>'; });
-    if(extra) h+='<th class="num">Anteil</th><th class="num">G/V %</th>';
-    h+='</tr></thead><tbody>';
-    t.rows.forEach(function(r,ri){ h+='<tr>'; t.cols.forEach(function(c,i){
-      var m=moneyIdx.indexOf(i)>=0, val=r[i], sc=editOf(i);
-      if(em&&sc!=null){ var a1="'I1'!"+colLetter(sc)+(t.srcRows[ri]+1); h+='<td class="edit-td"><input class="cell-edit" data-a1="'+a1+'" data-sheet="I1" data-srow="'+t.srcRows[ri]+'" data-scol="'+sc+'" value="'+esc(val==null?"":val)+'"></td>'; }
-      else { var cls=(m?'num ':'')+(i===0?'name':''); var disp=m?((i===gvIdx&&val>0?"+":"")+eur(val,(Math.abs(val)<100&&val%1!==0)?2:0)):esc(val); if(i===gvIdx) cls+= val<0?' neg':' pos'; var lu=t.links&&t.links[ri]&&t.links[ri][i]; if(lu&&/^https?:\/\//i.test(lu)) disp='<a class="exlink" href="'+esc(lu)+'" target="_blank" rel="noopener">'+disp+'</a>'; h+='<td class="'+cls+'">'+disp+'</td>'; }
+  function assetTable(g,rows,total,v,em){
+    var ci=v.colIdx||{};
+    rows=rows.slice().sort(function(a,b){return b.wert-a.wert;});
+    var sumW=0,sumE=0; rows.forEach(function(r){sumW+=r.wert;sumE+=r.einWert;});
+    var sgv=sumW-sumE, sgvPct=sumE?sgv/sumE*100:0, sant=total?sumW/total*100:0;
+    var h='<div class="panel"><div class="alv-bar"><span class="gdot" style="background:'+g.color+'"></span><h2>'+esc(g.label)+'</h2><span class="count">'+rows.length+'</span><span class="sp"></span><span class="muted" style="font-size:12px">'+eur(sumW)+' · '+sant.toFixed(0)+' %</span></div><div class="alv-wrap"><table class="alv"><thead><tr><th>Name</th><th>Depot</th><th class="num">Menge</th><th class="num">Kurs (€)</th><th class="num">Einstand (€)</th><th class="num">Wert (€)</th><th class="num">Anteil</th><th class="num">G/V %</th></tr></thead><tbody>';
+    rows.forEach(function(p){ var ant=total?p.wert/total*100:0, gvp=p.einWert?p.gv/p.einWert*100:0;
+      if(em){
+        function ed(col,val,isnum){ if(col==null||col<0) return '<td class="'+(isnum?'num':'')+'">'+esc(val==null?"":val)+'</td>'; var a1="'ASSET'!"+colLetter(col)+(p.row+1); return '<td class="edit-td"><input class="cell-edit" data-a1="'+a1+'" data-sheet="ASSET" data-srow="'+p.row+'" data-scol="'+col+'" value="'+esc(val==null?"":val)+'"></td>'; }
+        h+='<tr>'+ed(ci.name,p.name,false)+ed(ci.depot,p.depot,false)+ed(ci.menge,p.menge,true)+ed(ci.kurs,p.kurs,true)+ed(ci.einstand,p.einstand,true)+'<td class="num">'+eur(p.wert)+'</td><td class="num muted">'+ant.toFixed(1)+' %</td><td class="num '+(p.gv<0?'neg':'pos')+'">'+(p.gv>=0?"+":"")+gvp.toFixed(1)+' %</td></tr>';
+      } else {
+        h+='<tr><td class="name"><div class="aname">'+esc(p.name)+'</div>'+(p.ref?'<div class="aref">'+esc(p.ref)+'</div>':'')+'</td><td>'+esc(p.depot||"—")+'</td><td class="num">'+fmtMenge(p.menge)+'</td><td class="num">'+eur(p.kurs,2)+'</td><td class="num muted">'+eur(p.einstand,2)+'</td><td class="num">'+eur(p.wert)+'</td><td class="num muted">'+ant.toFixed(1)+' %</td><td class="num '+(p.gv<0?'neg':'pos')+'">'+(p.gv>=0?"+":"")+gvp.toFixed(1)+' %</td></tr>';
+      }
     });
-    if(extra){ var wert=r[wertIdx], gvv=r[gvIdx], cst=wert-gvv, pct=cst?gvv/cst*100:0, ant=dep?wert/dep*100:0; h+='<td class="num muted">'+ant.toFixed(1)+' %</td><td class="num '+(gvv<0?'neg':'pos')+'">'+(gvv>=0?"+":"")+pct.toFixed(1)+' %</td>'; }
-    h+='</tr>'; });
-    var sw=0,sg=0; t.rows.forEach(function(r){sw+=r[wertIdx];sg+=r[gvIdx];});
-    h+='</tbody><tfoot><tr>'; t.cols.forEach(function(c,i){ h+='<td class="'+(moneyIdx.indexOf(i)>=0?'num':'')+'">'+(i===0?'Summe':(i===wertIdx?eur(sw):(i===gvIdx?(sg>=0?"+":"")+eur(sg):'')))+'</td>'; });
-    if(extra){ var scst=sw-sg, spct=scst?sg/scst*100:0, sant=dep?sw/dep*100:0; h+='<td class="num">'+sant.toFixed(1)+' %</td><td class="num '+(sg<0?'neg':'pos')+'">'+(sg>=0?"+":"")+spct.toFixed(1)+' %</td>'; }
-    h+='</tr></tfoot>';
-    h+='</table></div></div>'; return h;
+    h+='</tbody><tfoot><tr><td>Summe</td><td></td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num">'+eur(sumW)+'</td><td class="num">'+sant.toFixed(1)+' %</td><td class="num '+(sgv<0?'neg':'pos')+'">'+(sgv>=0?"+":"")+sgvPct.toFixed(1)+' %</td></tr></tfoot></table></div></div>';
+    return h;
   }
   var GUV_EDIT={tage:2,umsatz:3,fee:5,iva:6,rep:8,neb:9,adj:10,son:11,est:13};
   function guvHTML(v){
@@ -1742,6 +1739,7 @@ var ERP_CFG={
     if(/BUCH$/.test(code)){ p.innerHTML=buchenHTML(code); return; }               // Hauptbuchbelege-Buchungsmaske (Business)
     if(node.children&&node.children.length){ p.innerHTML=groupHTML(code); return; }
     var tn=node.table, v=tn?V[tn]:null;
+    if(v&&v.kind==="asset"){ p.innerHTML=assetHTML(v); return; }                   // Wealth Management (Depot-Cockpit)
     if(v&&v.kind==="grid"){ v.title=node.label||tn; p.innerHTML=gridHTML(v,code); return; }
     p.innerHTML=noteHTML(code);
   }
@@ -1804,6 +1802,13 @@ var ERP_CFG={
 </script>
 <script>
 /* ============ PARSER (liest die Google-Tabelle) ============ */
+// Positionen eines ASSET-Eintrags einer Anlageklasse zuordnen (Wertpapier / Krypto / Edelmetall & Sachwert)
+function assetClass(name,ref,depot){
+  if(/^[A-Z]{2}[0-9A-Z]{9}[0-9]$/.test(String(ref||"").trim())) return "wp";   // ISIN → Aktie/ETF
+  var n=String(name||"").toLowerCase();
+  if(/\b(bitcoin|btc|ethereum|eth|xrp|ripple|solana|sol|cardano|ada|dogecoin|doge|litecoin|ltc|polkadot|dot|avalanche|avax|chainlink|link|polygon|matic|binance|bnb|tether|usdt|usdc|monero|xmr|stellar|xlm)\b/.test(n) || /krypto|coin|token/.test(n)) return "kr";
+  return "em"; // Edelmetalle, Münzen, Uhren & sonstige Sachwerte
+}
 function parseSheets(S){
   function cell(name,r,c){ var row=(S[name]||[])[r]; if(!row)return null; var v=row[c]; return (v===undefined||v==="")?null:v; }
   var LNK=(typeof window!=="undefined"&&window.__LINKS)||{};
@@ -1873,15 +1878,25 @@ function parseSheets(S){
   gridview('F','Global Cash – Bankkonten',['ID','Bank','Konto','Kontostand (€)','Bkr','Wert (€)'],rowsF,5,[3,5],{sheet:'F',srcRows:srcF,headerRow:0,edit:[{c:0,sc:0},{c:1,sc:1},{c:2,sc:2},{c:3,sc:3},{c:4,sc:4}]});
   var rowsG=[],srcG=[]; for(r=1;r<maxRow('G');r++){ var art=cell('G',r,1); if(!art||String(art).trim()==="Summe")continue; var betrag=num(cell('G',r,4))||0; var saldo=(String(art).indexOf("Verbindlich")===0)?-betrag:betrag; rowsG.push([cell('G',r,0),art,cell('G',r,2),cell('G',r,3),betrag,cell('G',r,5),cell('G',r,6),cell('G',r,7),saldo]); srcG.push(r); }
   gridview('G','Global AR/AP',['ID','Art','Name','Gegenpartei','Betrag (€)','Miete','Start','Bkr','Saldo (€)'],rowsG,8,[4,8],{sheet:'G',srcRows:srcG,headerRow:0,edit:mapCols(1,8)});
-  // investments
-  var wp=[],wpR=[],wpL=[]; for(r=3;r<9;r++){ var nm=cell('I1',r,1); if(!nm)continue; var s_=num(cell('I1',r,4)),ks=num(cell('I1',r,5)),ein=num(cell('I1',r,6)); var wert=(s_||0)*(ks||0),cost=(s_||0)*(ein||0); wp.push([nm,cell('I1',r,2),cell('I1',r,3),s_,ks,ein,round2(wert),round2(wert-cost)]); wpR.push(r); var lm={},lu=lnk('I1',r,1),li=lnk('I1',r,2); if(lu)lm[0]=lu; if(li)lm[1]=li; wpL.push(lm); }
-  var kr=[],krR=[]; for(r=13;r<15;r++){ var nm2=cell('I1',r,1); if(!nm2)continue; var mg=num(cell('I1',r,3)),ks2=num(cell('I1',r,4)),ei2=num(cell('I1',r,5)); var we2=(mg||0)*(ks2||0),co2=(mg||0)*(ei2||0); kr.push([nm2,cell('I1',r,2),mg,ks2,ei2,round2(we2),round2(we2-co2)]); krR.push(r); }
-  var em=[],emR=[]; for(r=20;r<24;r++){ var nm3=cell('I1',r,1); if(!nm3)continue; var mg3=num(cell('I1',r,3)),ks3=num(cell('I1',r,5)),ei3=num(cell('I1',r,6)); var we3=(mg3||0)*(ks3||0),co3=(mg3||0)*(ei3||0); em.push([nm3,cell('I1',r,2),mg3,cell('I1',r,4),ks3,ei3,round2(we3),round2(we3-co3)]); emR.push(r); }
-  views['I2']={kind:"invest",title:"Investments – Wertpapiere",
-    wp:{cols:["Name","ISIN","Depot","Stück","Kurs (€)","Einstand (€)","Wert (€)","G/V (€)"],rows:wp,srcRows:wpR,links:wpL,edit:[{d:0,s:1},{d:1,s:2},{d:2,s:3},{d:3,s:4},{d:4,s:5},{d:5,s:6}]},
-    kr:{cols:["Name","Wallet","Menge","Kurs (€)","Einstand (€)","Wert (€)","G/V (€)"],rows:kr,srcRows:krR,edit:[{d:0,s:1},{d:1,s:2},{d:2,s:3},{d:3,s:4},{d:4,s:5}]},
-    em:{cols:["Name","Art","Menge","Einheit","Kurs (€)","Einstand (€)","Wert (€)","G/V (€)"],rows:em,srcRows:emR,edit:[{d:0,s:1},{d:1,s:2},{d:2,s:3},{d:3,s:4},{d:4,s:5},{d:5,s:6}]}};
-  e=extract('I2',2); gridview('I3','Investments – Sonstige Vermögensgegenstände',e.cols,e.rows,2,[2,3],{sheet:'I2',srcRows:e.srcRows,headerRow:e.headerRow,edit:"auto"});
+  // Wealth Management — ASSET-Blatt generisch nach Header einlesen + Positionen klassifizieren
+  (function(){
+    var A=S['ASSET']; if(!A||!A.length) return;
+    var hr=-1; for(var rr=0;rr<Math.min(A.length,12);rr++){ var ln=(A[rr]||[]).map(function(x){return String(x==null?"":x);}); if(ln.some(function(x){return /^name$/i.test(x.trim());}) && ln.some(function(x){return /menge|st(ü|ue)ck|anzahl|wert|kurs/i.test(x);})){ hr=rr; break; } }
+    if(hr<0) return;
+    var H=(A[hr]||[]).map(function(x){return String(x==null?"":x).trim();});
+    function ci(re){ for(var i=0;i<H.length;i++){ if(re.test(H[i])) return i; } return -1; }
+    var iId=ci(/^id/i), iName=ci(/^name$/i), iRef=ci(/ref|isin/i), iDep=ci(/depot|verwahr|broker|lager/i), iMng=ci(/menge|st(ü|ue)ck|anzahl/i), iKurs=ci(/kurs/i), iEin=ci(/einstand/i), iBkr=ci(/buchungskreis|company/i), iWert=ci(/wert/i);
+    if(iName<0) iName=1;
+    var P=[];
+    for(var r2=hr+1;r2<A.length;r2++){ var row=A[r2]||[]; var nm=row[iName]; if(nm==null||String(nm).trim()===""||/^summe/i.test(String(nm)))continue;
+      var mng=num(row[iMng]), kurs=num(row[iKurs]), ein=num(row[iEin]);
+      var wert=(mng!=null&&kurs!=null)?(mng*kurs):(iWert>=0?(num(row[iWert])||0):0);
+      var einWert=(mng!=null&&ein!=null)?(mng*ein):0;
+      var ref=iRef>=0?String(row[iRef]||""):"", dep=iDep>=0?String(row[iDep]||""):"", bkr=iBkr>=0?String(row[iBkr]||""):"";
+      P.push({id:iId>=0?String(row[iId]||""):"",name:String(nm).trim(),ref:ref.trim(),depot:dep.trim(),menge:mng,kurs:kurs,einstand:ein,bkr:bkr,wert:round2(wert),einWert:round2(einWert),gv:round2(wert-einWert),cls:assetClass(nm,ref,dep),row:r2});
+    }
+    views['ASSET']={kind:"asset",title:"Wealth Management",positions:P,header:H,headerRow:hr,colIdx:{id:iId,name:iName,ref:iRef,depot:iDep,menge:iMng,kurs:iKurs,einstand:iEin,bkr:iBkr,wert:iWert}};
+  })();
   // GuV
   var months=[]; for(r=5;r<=30;r++){ var jahr=cell('H1.3',r,0),monat=cell('H1.3',r,1); if(monat==null||(typeof monat==="string"&&monat.indexOf("Summe")===0))continue;
     var tage=num(cell('H1.3',r,2))||0,ums=num(cell('H1.3',r,3))||0,fee=num(cell('H1.3',r,5))||0,iva=num(cell('H1.3',r,6))||0,rep=num(cell('H1.3',r,8))||0,neb=num(cell('H1.3',r,9))||0,adj=num(cell('H1.3',r,10))||0,son=num(cell('H1.3',r,11))||0;

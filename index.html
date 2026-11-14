@@ -272,6 +272,20 @@ table.alv input.cell-edit:disabled,table.alv select.cell-edit:disabled{opacity:.
 .gdot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:8px;flex:0 0 auto}
 .aname{font-weight:600;line-height:1.25}
 .aref{font-size:11px;color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;margin-top:1px}
+.saldo-hero{background:linear-gradient(135deg,#eef6ff,#fff 62%);border:1px solid #cfe0f5;border-radius:12px;padding:18px 22px;box-shadow:var(--shadow-md);margin-bottom:16px}
+.saldo-hero .sh-k{font-size:11.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--accent-ink);margin-bottom:7px}
+.saldo-hero .sh-v{font-size:38px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.02em;line-height:1;color:var(--ink)}
+.saldo-hero .sh-v.neg{color:var(--neg)}
+.saldo-hero .sh-d{font-size:12.5px;color:var(--ink-2);margin-top:9px}
+.acct-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(224px,1fr));gap:12px;padding:14px 16px 16px}
+.acct-card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:13px 15px 15px;box-shadow:var(--shadow-xs);display:flex;flex-direction:column}
+.acct-card .ac-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.acct-card .ac-bank{font-weight:600;font-size:13.5px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.acct-card .ac-konto{font-size:12px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.acct-card .ac-bal{font-size:23px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.01em;margin-top:10px;color:var(--ink)}
+.acct-card .ac-bal.neg{color:var(--neg)}
+.ag-sum{font-size:13.5px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--ink)}
+.ag-sum.neg{color:var(--neg)}
 .toast{position:fixed;bottom:40px;left:50%;transform:translateX(-50%);background:#1d2d3b;color:#fff;font-size:13px;padding:9px 16px;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.2);z-index:200;opacity:0;transition:opacity .2s;pointer-events:none}
 .toast.show{opacity:1}
 .toast.err{background:var(--neg)}
@@ -743,41 +757,29 @@ var ERP_CFG={
     var cmp=(D&&D.comp)||{}, bkName={}; Object.keys(cmp).forEach(function(k){ bkName[k]=cmp[k].name||""; });
     var sl=sphere==='business'?'Business':sphere==='gesamt'?'Gesamt':'Privat';
     var h='<div class="crumb">'+esc(sl)+' › Bank Accounts</div>';
-    h+='<div class="page-head"><div><h1>Bank Accounts</h1><div class="sub">Alle Bankkonten &amp; Saldo</div></div><span style="flex:1"></span><button class="editbtn'+(em?' on':'')+'" data-edit="BACC">'+(em?'✓ Fertig':'✎ Bearbeiten')+'</button></div>';
-    h+='<section class="tiles">'
-      +'<div class="tile big"><p class="k">Gesamtsaldo</p><div class="v" style="color:'+(total>=0?'var(--pos)':'var(--neg)')+'">'+eur(total)+'</div><div class="d">'+A.length+' Konten · '+nBanks+' Banken</div></div>'
-      +tile("Konten",String(A.length),"aktive Bankkonten")
-      +tile("Banken",String(nBanks),"verschiedene Institute")
-      +'</section>';
+    h+='<div class="page-head"><div><h1>Bank Accounts</h1><div class="sub">Kontostände aller Bankkonten</div></div><span style="flex:1"></span><button class="editbtn'+(em?' on':'')+'" data-edit="BACC">'+(em?'✓ Fertig':'✎ Bearbeiten')+'</button></div>';
+    h+='<div class="saldo-hero"><div class="sh-k">Gesamtsaldo · '+esc(sl)+'</div><div class="sh-v'+(total<0?' neg':'')+'">'+eur(total)+'</div><div class="sh-d">'+A.length+' Konten · '+nBanks+' Banken</div></div>';
     if(!A.length){ h+='<div class="note-card"><p>Keine Bankkonten in dieser Welt ('+esc(sl)+').</p></div>'; return h; }
     if(em){
       h+='<div class="note-card" style="padding:10px 14px;margin-bottom:12px;max-width:none"><p style="margin:0;font-size:12.5px" class="muted">Bank, Konto, Buchungskreis &amp; Kontostand sind editierbar — der <b>Gesamtsaldo</b> aktualisiert sich nach „✓ Fertig". Die <b>Konto-ID</b> bleibt als stabiler Schlüssel bestehen.</p></div>';
       h+=bankEditTable(A,v);
       return h;
     }
-    // Konten nach Saldo (Balken)
-    var pos=A.slice().sort(function(a,b){return b.saldo-a.saldo;});
-    var pmx=1; pos.forEach(function(p){ if(Math.abs(p.saldo)>pmx)pmx=Math.abs(p.saldo); });
-    h+='<div class="panel"><div class="alv-bar"><h2>Konten nach Saldo</h2><span class="sp"></span><span class="count">'+pos.length+'</span></div><div style="padding:16px 16px 18px">';
-    pos.forEach(function(p){ var w=Math.max(2,Math.abs(p.saldo)/pmx*100), pct=total?p.saldo/total*100:0, c=p.saldo<0?'var(--neg)':'#0070f2';
-      h+='<div class="bar-row"><div class="bl pname" title="'+esc(p.bank+(p.konto?' · '+p.konto:''))+'"><span class="pdot" style="background:'+c+'"></span><span class="pnm">'+esc(p.bank)+(p.konto?' <span class="muted" style="font-weight:400">· '+esc(p.konto)+'</span>':'')+'</span></div><div class="bt"><div class="bf" style="width:'+w.toFixed(1)+'%;background:'+c+'"></div></div><div class="bv">'+eur(p.saldo)+' <span class="muted" style="font-weight:400">· '+pct.toFixed(0)+'%</span></div></div>';
-    });
-    h+='</div></div>';
-    // Gruppen nach Buchungskreis
+    // Konten als Karten, gruppiert nach Buchungskreis — Kontostände im Vordergrund
     var groups={}, order=[]; A.forEach(function(a){ var k=a.bkr||"—"; if(!groups[k]){groups[k]=[];order.push(k);} groups[k].push(a); });
     order.sort();
-    order.forEach(function(k){ h+=bankTable(k,bkName[k],groups[k],total); });
+    order.forEach(function(k){ h+=bankGroupHTML(k,bkName[k],groups[k]); });
     return h;
   }
-  function bankTable(bkr,name,rows,total){
+  function bankGroupHTML(bkr,name,rows){
     rows=rows.slice().sort(function(a,b){return b.saldo-a.saldo;});
     var sum=0; rows.forEach(function(r){sum+=r.saldo;});
     var title=(bkr&&bkr!=="—")?('Buchungskreis '+bkr+(name?' · '+name:'')):'Ohne Buchungskreis';
-    var h='<div class="panel"><div class="alv-bar"><h2>'+esc(title)+'</h2><span class="count">'+rows.length+'</span><span class="sp"></span><span class="muted" style="font-size:12px">'+eur(sum)+(total?(' · '+(sum/total*100).toFixed(0)+' %'):'')+'</span></div><div class="alv-wrap"><table class="alv"><thead><tr><th>Konto-ID</th><th>Bank</th><th>Konto</th><th class="num">Kontostand (€)</th><th class="num">Anteil</th></tr></thead><tbody>';
-    rows.forEach(function(p){ var ant=total?p.saldo/total*100:0;
-      h+='<tr><td class="idtag">'+esc(p.id)+'</td><td class="name">'+esc(p.bank)+'</td><td>'+esc(p.konto||"—")+'</td><td class="num'+(p.saldo<0?' neg':'')+'">'+eur(p.saldo)+'</td><td class="num muted">'+ant.toFixed(1)+' %</td></tr>';
+    var h='<div class="panel"><div class="alv-bar"><h2>'+esc(title)+'</h2><span class="count">'+rows.length+'</span><span class="sp"></span><span class="ag-sum'+(sum<0?' neg':'')+'">'+eur(sum)+'</span></div><div class="acct-grid">';
+    rows.forEach(function(p){
+      h+='<div class="acct-card"><div class="ac-head"><span class="ac-bank" title="'+esc(p.bank)+'">'+esc(p.bank)+'</span><span class="idtag">'+esc(p.id)+'</span></div><div class="ac-konto" title="'+esc(p.konto)+'">'+esc(p.konto||"—")+'</div><div class="ac-bal'+(p.saldo<0?' neg':'')+'">'+eur(p.saldo)+'</div></div>';
     });
-    h+='</tbody><tfoot><tr><td>Summe</td><td></td><td></td><td class="num'+(sum<0?' neg':'')+'">'+eur(sum)+'</td><td class="num">'+(total?(sum/total*100).toFixed(1):0)+' %</td></tr></tfoot></table></div></div>';
+    h+='</div></div>';
     return h;
   }
   function bankEditTable(A,v){
